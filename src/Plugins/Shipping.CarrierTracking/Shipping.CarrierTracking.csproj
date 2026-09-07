@@ -15,4 +15,10 @@
 		<OutputPath>..\..\Web\Grand.Web\Plugins\Shipping.CarrierTracking\</OutputPath>
 		<OutDir>$(OutputPath)</OutDir>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<None Update="logo.jpg">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 </Project>
