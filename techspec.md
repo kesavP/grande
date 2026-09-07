@@ -39,7 +39,8 @@ the application in Docker, and deploying it to Azure.
   - [8.8 Custom domain and TLS](#88-custom-domain-and-tls)
   - [8.9 Updating a deployment](#89-updating-a-deployment)
   - [8.10 Troubleshooting](#810-troubleshooting)
-  - [8.11 What the Terraform module enforces](#811-what-the-terraform-module-enforces)
+  - [8.11 Validating a deployment against the rules](#811-validating-a-deployment-against-the-rules)
+  - [8.12 What the Terraform module enforces](#812-what-the-terraform-module-enforces)
 - [9. Verification](#9-verification)
 - [10. Known constraints](#10-known-constraints)
 ---
@@ -412,7 +413,7 @@ the recommended target; [section 8.7](#87-alternative--app-service) covers App S
 > ```
 >
 > The explanations below apply to both paths. The module encodes several of them as `check` blocks
-> that fail at plan time rather than at apply — see [section 8.11](#811-what-the-terraform-module-enforces).
+> that fail at plan time rather than at apply — see [section 8.12](#812-what-the-terraform-module-enforces).
 
 ### 8.1 Prerequisites
 
@@ -504,7 +505,7 @@ Terraform in [`infra/`](infra/README.md) provisions all of this. The table is th
 | Blob container `dpkeys` | data-protection key ring | **Must exist before the app starts.** Without it the key ring falls back to the container filesystem and every restart signs out every user. |
 | Log Analytics + Application Insights | telemetry | Setting `ApplicationInsights__ConnectionString` activates the OpenTelemetry exporter `AddServiceDefaults()` already wires in. Do it on the first deployment, not after a performance problem. |
 | Container Apps environment | hosts the app and jobs | — |
-| Container app | the application | Port 8080, `/health/live` probes — see [8.11](#811-what-the-terraform-module-enforces). |
+| Container app | the application | Port 8080, `/health/live` probes — see [8.12](#812-what-the-terraform-module-enforces). |
 | Container Apps Jobs | scheduled tasks | Only when `min_replicas = 0` — see [8.5](#85-scheduled-tasks-with-scale-to-zero). |
 | Azure Cache for Redis | cross-replica cache invalidation | Optional, **required** above one replica. |
 | Azure Files shares | `App_Data`, media uploads | Optional; must be seeded before mounting. |
@@ -806,7 +807,42 @@ curl -i https://<fqdn>/health/ready
 
 ---
 
-### 8.11 What the Terraform module enforces
+### 8.11 Validating a deployment against the rules
+
+The `check` blocks in the next section only protect deployments made through Terraform. A
+deployment made with the `az` CLI, from the portal, or by editing an existing app has no such
+guard — and every one of these rules corresponds to a failure that is **silent in production**.
+
+`infra/scripts/check-deployment.sh` applies the same rules to a live app. It is read-only.
+
+```bash
+./infra/scripts/check-deployment.sh -g rg-grandnode-prod -n ca-grandnode-prod
+```
+
+```
+GrandNode deployment check: ca-grandnode-prod (rg: rg-grandnode-prod)
+  minReplicas=0 maxReplicas=1 jobs=6 installer=false redis=unset
+
+  PASS  installer_needs_a_warm_replica
+  PASS  background_work_has_a_home
+  PASS  redis_required_for_scale_out
+  PASS  volumes_must_be_seeded_first (no mounts)
+  PASS  force_https_behind_ingress
+  PASS  readiness_probe_not_latching (/health/live)
+
+All rules pass.
+```
+
+It checks the four `check` block rules plus the two settings that are easy to miss by hand —
+`Security__ForceUseHTTPS`, and a readiness probe that must not point at `/health/ready`. Exit codes:
+`0` all pass, `1` one or more violations, `2` could not inspect. Suitable for a post-deploy gate in
+a pipeline.
+
+Requires `az` (signed in) and `jq`.
+
+---
+
+### 8.12 What the Terraform module enforces
 
 Four `check` blocks encode the failures this deployment actually hit, so they surface at plan time
 instead of in production:
