@@ -1,0 +1,19 @@
+# Rename to backend.tf to keep state in Azure Storage instead of on disk.
+# State holds every generated secret in plaintext, so the container must be
+# private and access controlled. Each environment gets its OWN state key -
+# that separation is the point of splitting the roots.
+#
+#   az group create -n rg-tfstate -l southindia
+#   az storage account create -n sttfstate<unique> -g rg-tfstate -l southindia \
+#       --sku Standard_LRS --encryption-services blob
+#   az storage container create -n tfstate --account-name sttfstate<unique>
+
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "rg-tfstate"
+    storage_account_name = "sttfstate<unique>"
+    container_name       = "tfstate"
+    key                  = "grandnode.prod.tfstate"
+    use_azuread_auth     = true
+  }
+}

@@ -1,0 +1,11 @@
+# State holds every generated secret in plaintext - never commit it.
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+*.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+
+# .terraform.lock.hcl is intentionally NOT ignored - commit it to pin providers.
