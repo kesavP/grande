@@ -1,0 +1,70 @@
+@{
+    Layout = "_ConfigurePlugin";
+}
+@model Shipping.CarrierTracking.Models.ConfigurationModel
+<input id="active-menu-item" type="hidden" value="/Admin/Shipping/Providers"/>
+<form asp-controller="CarrierTracking" asp-action="Configure" method="post">
+    <div class="form-horizontal">
+        <div class="form-body">
+            <div class="form-group">
+                <div class="col-md-3 col-sm-3 text-right">
+                    <label class="control-label">Webhook URL</label>
+                </div>
+                <div class="col-md-9 col-sm-9">
+                    <input class="form-control" value="@Model.WebhookUrl" readonly/>
+                    <span class="help-block">
+                        Register this URL with the carrier. It accepts POST only and rejects any
+                        request whose X-Carrier-Signature header does not match an HMAC-SHA256 of
+                        the raw body using the signing secret below.
+                    </span>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-md-3 col-sm-3 text-right">
+                    <admin-label asp-for="SigningSecret" class="control-label"/>
+                </div>
+                <div class="col-md-9 col-sm-9">
+                    <admin-input asp-for="SigningSecret"/>
+                    <span asp-validation-for="SigningSecret"></span>
+                    <span class="help-block">
+                        Shared secret the carrier signs with. The endpoint is anonymous - it has to
+                        be, the carrier cannot authenticate - so this is the only thing separating a
+                        real delivery event from anyone who guesses the URL. While it is empty every
+                        request is rejected.
+                    </span>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-md-3 col-sm-3 text-right">
+                    <admin-label asp-for="TrackingUrlTemplate" class="control-label"/>
+                </div>
+                <div class="col-md-9 col-sm-9">
+                    <admin-input asp-for="TrackingUrlTemplate"/>
+                    <span asp-validation-for="TrackingUrlTemplate"></span>
+                    <span class="help-block">
+                        Customer-facing tracking page, with {0} replaced by the tracking number -
+                        for example https://carrier.example.com/track/{0}
+                    </span>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-md-3 col-sm-3 text-right">
+                    <admin-label asp-for="MaxAttempts" class="control-label"/>
+                </div>
+                <div class="col-md-9 col-sm-9">
+                    <admin-input asp-for="MaxAttempts"/>
+                    <span asp-validation-for="MaxAttempts"></span>
+                    <span class="help-block">
+                        Stop retrying an event after this many failures, so one unparseable payload
+                        is not retried on every run forever.
+                    </span>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-md-9 col-md-offset-3 col-sm-9 col-sm-offset-3">
+                    <input type="submit" name="save" class="btn btn-success" value="Save"/>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>

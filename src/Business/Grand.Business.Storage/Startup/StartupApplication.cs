@@ -16,6 +16,9 @@ public class StartupApplication : IStartupApplication
     {
         services.AddScoped<IDownloadService, DownloadService>();
 
+        //data lake (bronze) writer - inert unless Azure:LakeBronzeContainerName is set
+        services.AddScoped<IEventLakeWriter, AzureEventLakeWriter>();
+
         //picture service
         var azureConfig = new AzureConfig();
         configuration.GetSection("Azure").Bind(azureConfig);

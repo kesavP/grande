@@ -51,6 +51,15 @@ public partial class InstallationService
                 Enabled = false,
                 StopOnError = false,
                 TimeInterval = 1440
+            },
+            new ScheduleTask {
+                //Key must equal the DI registration in Grand.Module.ScheduledTasks.
+                //Disabled by default: it does nothing until Shipping.CarrierTracking is installed
+                //and a carrier is actually posting webhooks.
+                ScheduleTaskName = "Apply carrier shipment events",
+                Enabled = false,
+                StopOnError = false,
+                TimeInterval = 5
             }
         };
         tasks.ForEach(x => _scheduleTaskRepository.Insert(x));

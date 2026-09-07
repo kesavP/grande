@@ -6,8 +6,14 @@
 		<GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
 	    <EnableDefaultContentItems>false</EnableDefaultContentItems>
 		<UseAppHost>false</UseAppHost>
-		<!--Set GenerateRuntimeConfigurationFiles as true when Admin panel is supposed to works independent-->
-		<GenerateRuntimeConfigurationFiles>false</GenerateRuntimeConfigurationFiles>
+		<!--Publish with -p:StandaloneAdmin=true to run the Admin panel as its own deployable app
+		(its own container/host) instead of composing it into Grand.Web. That needs the runtime
+		configuration files "dotnet Grand.Web.Admin.dll" reads, its own App_Data/appsettings.json,
+		and a copy of the Plugins/Modules folders the shared build writes under Grand.Web.
+		The default (false) keeps the panel a library that Grand.Web composes in - do not set it
+		for that build: the runtime config and App_Data would collide with the storefront's own.-->
+		<StandaloneAdmin Condition="'$(StandaloneAdmin)' == ''">false</StandaloneAdmin>
+		<GenerateRuntimeConfigurationFiles>$(StandaloneAdmin)</GenerateRuntimeConfigurationFiles>
 		<CompressionEnabled>false</CompressionEnabled>
 		<StaticWebAssetBasePath>_content/$(MSBuildProjectName)</StaticWebAssetBasePath>
 	</PropertyGroup>	
@@ -15,6 +21,35 @@
 		<Content Include="Areas\**" CopyToPublishDirectory="Never" />
 		<Content Include="wwwroot\**" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
+	<!--EnableDefaultContentItems is off, so App_Data/appsettings.json is not published by any default
+	glob. A standalone Admin has to carry it - AddAppSettingsJsonFile reads App_Data/appsettings.json
+	relative to the content root and the host fails to start without it. Kept out of the composed build,
+	where a referenced project's publish items would overwrite the storefront's own appsettings.json.-->
+	<ItemGroup Condition="'$(StandaloneAdmin)' == 'true'">
+		<Content Include="App_Data\**" CopyToPublishDirectory="PreserveNewest" Exclude="App_Data\DataProtectionKeys\*.xml" />
+	</ItemGroup>
+	<!--Plugins and modules build into Grand.Web's folders (their csproj pins OutputPath there), and the
+	Admin panel serves their Areas/Admin configuration screens - so a standalone Admin needs the same
+	folders. Mirrors the PublishViews target in Grand.Web.csproj.
+
+	Theme plugins are the exception and are left out. A storefront theme compiles against Grand.Web
+	itself (see Theme.Modern.csproj) with ExcludeAssets=all, so it resolves that assembly from the host
+	at run time - which an Admin-only process does not have. PluginManager.Load fails hard on a plugin
+	it cannot load, so shipping one here would stop the host from starting at all. The cost is that the
+	theme picker in Settings -> General/Common (it injects IEnumerable<IThemeView>) is empty in a
+	standalone Admin; the storefront keeps using whatever theme is already stored.-->
+	<Target Name="PublishPluginsAndModules" BeforeTargets="PrepareForPublish" Condition="'$(StandaloneAdmin)' == 'true'">
+		<PropertyGroup>
+			<!--Fully resolved: a recursive wildcard on a relative "..\" path matches nothing.-->
+			<GrandWebDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../Grand.Web/'))</GrandWebDir>
+		</PropertyGroup>
+		<ItemGroup>
+			<PluginFiles Include="$(GrandWebDir)Plugins/**/*" Exclude="$(GrandWebDir)Plugins/Theme.*/**/*" />
+			<ModuleFiles Include="$(GrandWebDir)Modules/**/*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PublishDir)/Plugins/%(RecursiveDir)" SkipUnchangedFiles="true" />
+		<Copy SourceFiles="@(ModuleFiles)" DestinationFolder="$(PublishDir)/Modules/%(RecursiveDir)" SkipUnchangedFiles="true" />
+	</Target>
 	<ItemGroup>
 		<PackageReference Include="elFinder.Net.AspNetCore" />
 		<PackageReference Include="elFinder.Net.Core" />

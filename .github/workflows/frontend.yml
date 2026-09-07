@@ -1,0 +1,64 @@
+name: Frontend CI
+
+# The Vue/Vite bundles under wwwroot/bundles are COMMITTED and served as-is, but
+# no workflow builds them - so a change to vueapp/src or theme CSS that ships
+# without running `npm run build` is simply not on the page, and CI stays green.
+# This rebuilds and fails if the committed output does not match the source.
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'src/Web/Grand.Web/vueapp/**'
+      - 'src/Web/Grand.Web/wwwroot/theme/css/**'
+      - 'src/Web/Grand.Web/wwwroot/bundles/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    branches: [ develop, main ]
+    paths:
+      - 'src/Web/Grand.Web/vueapp/**'
+      - 'src/Web/Grand.Web/wwwroot/theme/css/**'
+      - 'src/Web/Grand.Web/wwwroot/bundles/**'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: src/Web/Grand.Web/vueapp
+
+jobs:
+  bundles:
+    name: lint and verify committed bundles
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Web/Grand.Web/vueapp/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # npm run build = vite build + build-theme-css.mjs. Running only `vite build`
+      # would leave the theme CSS stale.
+      - name: Build bundles
+        run: npm run build
+
+      - name: Verify committed bundles are up to date
+        working-directory: .
+        run: |
+          if ! git diff --quiet -- src/Web/Grand.Web/wwwroot/bundles; then
+            echo "::error::Committed bundles do not match their source."
+            echo "Run 'npm run build' in src/Web/Grand.Web/vueapp and commit the result."
+            git diff --stat -- src/Web/Grand.Web/wwwroot/bundles
+            exit 1
+          fi
+          echo "Committed bundles match the build output."

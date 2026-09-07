@@ -23,7 +23,11 @@
 		<ProjectReference Include="..\..\Core\Grand.Infrastructure\Grand.Infrastructure.csproj" />
 		<ProjectReference Include="..\..\Core\Grand.SharedKernel\Grand.SharedKernel.csproj" />
 		<ProjectReference Include="..\Grand.Web.Common\Grand.Web.Common.csproj" />
-		<ProjectReference Include="..\Grand.Web.Admin\Grand.Web.Admin.csproj" />
+		<!--No source in Grand.Web references Grand.Web.Admin: the reference exists only so the assembly
+		is present as an MVC application part, which is what maps the /admin routes. Publish with
+		-p:IncludeAdminPanel=false to leave the admin panel out and ship it as its own container
+		(Dockerfile target "admin").-->
+		<ProjectReference Include="..\Grand.Web.Admin\Grand.Web.Admin.csproj" Condition="'$(IncludeAdminPanel)' != 'false'" />
 		<ProjectReference Include="..\Grand.Web.Vendor\Grand.Web.Vendor.csproj" />
 		<ProjectReference Include="..\Grand.Web.Store\Grand.Web.Store.csproj" />
 	</ItemGroup>

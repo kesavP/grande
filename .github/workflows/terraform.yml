@@ -1,0 +1,48 @@
+name: Terraform CI
+
+# infra/ has no gate today, so a formatting slip or a resource type that does not
+# exist in the provider is only discovered at apply time - against a live
+# subscription. fmt and validate are cheap and catch both.
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    branches: [ develop, main ]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: fmt and validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Format check
+        run: terraform fmt -check -recursive -diff infra
+
+      # Each environment is a separate root module, so each needs its own init.
+      # -backend=false keeps this offline: no state, no credentials, no Azure
+      # calls. validate still resolves the provider schema, which is what catches
+      # a misspelled resource type or a bad attribute.
+      - name: Validate environments
+        run: |
+          for env in infra/environments/*/; do
+            echo "::group::$env"
+            terraform -chdir="$env" init -backend=false -input=false
+            terraform -chdir="$env" validate
+            echo "::endgroup::"
+          done

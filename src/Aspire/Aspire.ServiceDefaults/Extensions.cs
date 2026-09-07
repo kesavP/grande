@@ -46,6 +46,19 @@ public static class Extensions
         });
 
         builder.Services.AddOpenTelemetry()
+            // Configured here rather than beside an exporter so it applies to every
+            // one of them - it previously sat inside the Azure Monitor branch, which
+            // left an OTLP-only deployment with no service name at all.
+            //
+            // service.instance.id is what distinguishes replicas of the same service.
+            // Environment.MachineName is the container hostname, which Container Apps
+            // and Kubernetes both set per replica, so counting distinct values of this
+            // attribute is how you see how many instances are actually running - the
+            // application itself has no cluster registry and the admin System Info page
+            // only ever reports the one process that served the request.
+            .ConfigureResource(resource => resource.AddService(
+                "Grandnode",
+                serviceInstanceId: Environment.MachineName))
             .WithMetrics(metrics =>
             {
                 metrics.AddAspNetCoreInstrumentation()
@@ -78,15 +91,11 @@ public static class Extensions
         // Uncomment the following lines to enable the Azure Monitor exporter (requires the Azure.Monitor.OpenTelemetry.AspNetCore package)
         if (!string.IsNullOrEmpty(builder.Configuration["ApplicationInsights:ConnectionString"]))
         {
+            //resource attributes, including service.instance.id, are configured once in
+            //ConfigureOpenTelemetry and apply to this exporter too
             builder.Services.AddOpenTelemetry().UseAzureMonitor(o =>
             {
                 o.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
-            }).ConfigureResource(resource =>
-            {                
-                resource.AddAttributes(
-                [
-                    new("service.name", "Grandnode")
-                ]);
             });
         }
 

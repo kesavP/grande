@@ -1,4 +1,4 @@
-using Grand.Business.Core.Interfaces.Common.Security;
+﻿using Grand.Business.Core.Interfaces.Common.Security;
 using Grand.Data;
 using Grand.Domain;
 using Grand.Domain.Admin;
@@ -115,6 +115,7 @@ public partial class InstallationService : IInstallationService
         IRepository<SearchTerm> searchtermRepository,
         IRepository<Setting> settingRepository,
         IRepository<Shipment> shipmentRepository,
+        IRepository<ShipmentEventOutbox> shipmentEventOutboxRepository,
         IRepository<Warehouse> warehouseRepository,
         IRepository<PickupPoint> pickupPointsRepository,
         IRepository<Permission> permissionRepository,
@@ -209,6 +210,7 @@ public partial class InstallationService : IInstallationService
         _searchtermRepository = searchtermRepository;
         _settingRepository = settingRepository;
         _shipmentRepository = shipmentRepository;
+        _shipmentEventOutboxRepository = shipmentEventOutboxRepository;
         _shipmentNoteRepository = shipmentNoteRepository;
         _warehouseRepository = warehouseRepository;
         _pickupPointsRepository = pickupPointsRepository;
@@ -375,6 +377,7 @@ public partial class InstallationService : IInstallationService
     private readonly IRepository<SearchTerm> _searchtermRepository;
     private readonly IRepository<Setting> _settingRepository;
     private readonly IRepository<Shipment> _shipmentRepository;
+    private readonly IRepository<ShipmentEventOutbox> _shipmentEventOutboxRepository;
     private readonly IRepository<Warehouse> _warehouseRepository;
     private readonly IRepository<PickupPoint> _pickupPointsRepository;
     private readonly IRepository<Permission> _permissionRepository;
@@ -859,6 +862,18 @@ public partial class InstallationService : IInstallationService
         await dbContext.CreateIndex(_shipmentNoteRepository,
             OrderBuilder<ShipmentNote>.Create().Descending(x => x.CreatedOnUtc), "CreatedOnUtc");
 
+        //carrier event outbox - the relay scans for outstanding work on a timer and the collection
+        //grows with every callback, so both of its passes and the tracker lookup need support
+        await dbContext.CreateIndex(_shipmentEventOutboxRepository,
+            OrderBuilder<ShipmentEventOutbox>.Create()
+                .Ascending(x => x.ProcessedUtc).Ascending(x => x.CreatedOnUtc), "Outbox_Processed");
+        await dbContext.CreateIndex(_shipmentEventOutboxRepository,
+            OrderBuilder<ShipmentEventOutbox>.Create()
+                .Ascending(x => x.PublishedUtc).Ascending(x => x.CreatedOnUtc), "Outbox_Published");
+        await dbContext.CreateIndex(_shipmentEventOutboxRepository,
+            OrderBuilder<ShipmentEventOutbox>.Create().Ascending(x => x.TrackingNumber),
+            "Outbox_TrackingNumber");
+
         //order
         await dbContext.CreateIndex(_orderRepository,
             OrderBuilder<Order>.Create().Ascending(x => x.CustomerId).Descending(x => x.CreatedOnUtc),
@@ -993,9 +1008,13 @@ public partial class InstallationService : IInstallationService
 
     private async Task CreateTables(string? local)
     {
-        if (string.IsNullOrEmpty(local))
-            return;
-
+        //An empty collation means "create the collections without one", not "skip schema creation".
+        //Returning early here also skipped CreateIndexes, leaving an installation with no indexes at
+        //all - collection scans on every query and unique constraints unenforced. CreateTable already
+        //handles a null/empty collation by calling CreateCollectionAsync without CreateCollectionOptions.
+        //Providers that reject collation outright (Cosmos DB for MongoDB vCore returns
+        //"Collation is currently not supported") can only be installed with it empty, so this path has
+        //to build the full schema.
         try
         {
             var configuration = _serviceProvider.GetRequiredService<IConfiguration>();

@@ -47,4 +47,16 @@ public class AzureConfig
     ///     The keyIdentifier is the key vault key identifier used for key encryption.
     /// </summary>
     public string KeyIdentifier { get; set; }
+
+    /// <summary>
+    ///     Container holding the raw (bronze) layer of the data lake. Empty disables lake writing
+    ///     entirely - the application keeps working, it simply publishes nothing.
+    /// </summary>
+    public string LakeBronzeContainerName { get; set; }
+
+    /// <summary>
+    ///     Connection string for the lake account. Falls back to AzureBlobStorageConnectionString
+    ///     when empty, so a single-account deployment needs no extra configuration.
+    /// </summary>
+    public string LakeStorageConnectionString { get; set; }
 }
