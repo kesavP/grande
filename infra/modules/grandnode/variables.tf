@@ -229,6 +229,32 @@ variable "appinsights_sampling_percentage" {
   default     = 100
 }
 
+variable "scheduled_task_jobs" {
+  description = <<-EOT
+    Scheduled tasks to run as Container Apps Jobs, keyed by the task name.
+
+    The key must exactly equal the ScheduleTaskName stored in the database, which
+    is also the DI registration key - the runner resolves the task by it, and a
+    mismatch means the job runs and finds nothing to do.
+
+    Seeded task names:
+      "Send emails", "Clear cache", "Generate sitemap XML file", "Delete guests",
+      "Update currency exchange rates", "End of the auctions",
+      "Cancel unpaid and pending orders", "Apply carrier shipment events"
+
+    Empty (the default) creates no jobs, which is correct when min_replicas >= 1
+    and the in-process loop is already running everything.
+  EOT
+  type = map(object({
+    cron            = string
+    timeout_seconds = optional(number, 600)
+    retry_limit     = optional(number, 1)
+    cpu             = optional(number, 0.5)
+    memory          = optional(string, "1Gi")
+  }))
+  default = {}
+}
+
 variable "enable_lakehouse" {
   description = <<-EOT
     Create bronze/silver/gold containers on the storage account and let the

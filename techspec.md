@@ -6,28 +6,42 @@ the application in Docker, and deploying it to Azure.
 - [1. What is being deployed](#1-what-is-being-deployed)
 - [2. Prerequisites](#2-prerequisites)
 - [3. Building the images](#3-building-the-images)
+  - [3.1 All-in-one image](#31-all-in-one-image)
+  - [3.2 Storefront-only image](#32-storefront-only-image)
+  - [3.3 Admin-only image](#33-admin-only-image)
+  - [3.4 Build arguments](#34-build-arguments)
 - [4. Generating the API secret keys](#4-generating-the-api-secret-keys)
+  - [4.1 When they are required](#41-when-they-are-required)
+  - [4.2 Why 32 characters](#42-why-32-characters)
+  - [4.3 Generating a key](#43-generating-a-key)
+  - [4.4 Rules for the value](#44-rules-for-the-value)
 - [5. Configuration reference](#5-configuration-reference)
+  - [5.1 Core settings](#51-core-settings)
+  - [5.2 Behind a reverse proxy or cloud ingress](#52-behind-a-reverse-proxy-or-cloud-ingress)
+  - [5.3 Settings that must be identical on every host sharing one database](#53-settings-that-must-be-identical-on-every-host-sharing-one-database)
+  - [5.4 Multi-instance and scale-out](#54-multi-instance-and-scale-out)
 - [6. Running in Docker — single container](#6-running-in-docker--single-container)
+  - [6.1 Network and database](#61-network-and-database)
+  - [6.2 Application](#62-application)
+  - [6.3 First-run installation](#63-first-run-installation)
+  - [6.4 Skipping the installer](#64-skipping-the-installer)
 - [7. Running in Docker — split storefront / admin](#7-running-in-docker--split-storefront--admin)
+  - [7.1 Storefront](#71-storefront)
+  - [7.2 Admin](#72-admin)
 - [8. Deploying to Azure](#8-deploying-to-azure)
   - [8.1 Prerequisites](#81-prerequisites)
-  - [8.2 Step 1 — Variables and resource group](#82-step-1--variables-and-resource-group)
-  - [8.3 Step 2 — Container registry and image](#83-step-2--container-registry-and-image)
-  - [8.4 Step 3 — MongoDB](#84-step-3--mongodb)
-  - [8.5 Step 4 — Storage for media and keys](#85-step-4--storage-for-media-and-keys)
-  - [8.6 Step 5 — Application Insights](#86-step-5--application-insights)
-  - [8.7 Step 6 — Container Apps environment and the app](#87-step-6--container-apps-environment-and-the-app)
-  - [8.8 Step 7 — First-run installation](#88-step-7--first-run-installation)
-  - [8.9 Scaling out](#89-scaling-out)
-  - [8.10 Optional — split storefront / admin](#810-optional--split-storefront--admin)
-  - [8.11 Alternative — App Service](#811-alternative--app-service)
-  - [8.12 Custom domain and TLS](#812-custom-domain-and-tls)
-  - [8.13 Updating a deployment](#813-updating-a-deployment)
-  - [8.14 Troubleshooting](#814-troubleshooting)
+  - [8.2 What gets created, and why](#82-what-gets-created-and-why)
+  - [8.3 Deploying](#83-deploying)
+  - [8.4 Scaling out](#84-scaling-out)
+  - [8.5 Scheduled tasks with scale-to-zero](#85-scheduled-tasks-with-scale-to-zero)
+  - [8.6 Optional — split storefront / admin](#86-optional--split-storefront--admin)
+  - [8.7 Alternative — App Service](#87-alternative--app-service)
+  - [8.8 Custom domain and TLS](#88-custom-domain-and-tls)
+  - [8.9 Updating a deployment](#89-updating-a-deployment)
+  - [8.10 Troubleshooting](#810-troubleshooting)
+  - [8.11 What the Terraform module enforces](#811-what-the-terraform-module-enforces)
 - [9. Verification](#9-verification)
 - [10. Known constraints](#10-known-constraints)
-
 ---
 
 ## 1. What is being deployed
@@ -375,13 +389,30 @@ without a shared mount, files uploaded through admin are invisible to the storef
 ## 8. Deploying to Azure
 
 A complete walkthrough, from an empty subscription to a running store. Azure Container Apps is
-the recommended target; [section 8.11](#811-alternative--app-service) covers App Service.
+the recommended target; [section 8.7](#87-alternative--app-service) covers App Service.
 
 > **Two paths to the same result.** This section is the imperative `az` CLI walkthrough — useful
 > for understanding exactly what gets created, and for a one-off environment. For anything
-> repeatable, use the Terraform module in [`infra/`](infra/README.md), which provisions the same
-> resources with the same settings. The explanations below apply to both; the module's README
-> covers only what is specific to running it.
+> repeatable, use the Terraform in [`infra/`](infra/README.md):
+>
+> ```
+> infra/
+> ├── modules/grandnode/     every resource; no provider block, no subscription_id
+> └── environments/
+>     ├── prod/              provider + backend + state + a module call
+>     └── staging/
+> ```
+>
+> Each environment is a separate root with its own state, so an apply in staging cannot touch
+> production. Adding an environment is ~20 lines calling the same module.
+>
+> ```bash
+> cd infra/environments/prod
+> terraform init && terraform plan && terraform apply
+> ```
+>
+> The explanations below apply to both paths. The module encodes several of them as `check` blocks
+> that fail at plan time rather than at apply — see [section 8.11](#811-what-the-terraform-module-enforces).
 
 ### 8.1 Prerequisites
 
@@ -427,8 +458,8 @@ Registration takes a few minutes. Check with
 |---|---|---|
 | Region | see note | Put the app, database and storage in the **same** region — cross-region database latency dominates every request. **Not `westeurope`** — see below. |
 | MongoDB | Atlas, Cosmos DB for MongoDB **vCore**, or self-hosted | Atlas or vCore. The RU-based Cosmos Mongo API is a compatibility layer on a different engine, not a real MongoDB server. |
-| Topology | single container, or split storefront/admin | Start single. Split only for ingress isolation — see [section 8.10](#810-optional-split-storefront--admin). |
-| Scale | 1 replica, or many | Start at 1. Multi-replica requires Redis and blob storage first — see [section 8.9](#89-scaling-out). |
+| Topology | single container, or split storefront/admin | Start single. Split only for ingress isolation — see [section 8.6](#86-optional--split-storefront--admin). |
+| Scale | 1 replica, or many | Start at 1. Multi-replica requires Redis and blob storage first — see [section 8.4](#84-scaling-out). |
 | Custom domain | yes/no | Optional, can be added later. |
 
 > **Region availability.** `westeurope` is capacity-restricted for new subscriptions. The trap is
@@ -458,254 +489,104 @@ for Redis and an Azure Files share.
 
 ---
 
-### 8.2 Step 1 — Variables and resource group
+### 8.2 What gets created, and why
 
-Set these once; every later command reuses them.
+Terraform in [`infra/`](infra/README.md) provisions all of this. The table is the reference for
+*what* exists and *why*; the module is the authority on *how* it is configured.
+
+| Resource | Purpose | Notes that matter |
+|---|---|---|
+| Resource group | container for everything | — |
+| Container registry (Basic) | holds the application image | The only unavoidable charge — ACR has no free tier. |
+| **Cosmos DB for MongoDB vCore** | the database | vCore, **not** the RU-based Mongo API: that is a compatibility layer over a different engine, and GrandNode relies on genuine MongoDB behaviour (GridFS, array update operators, aggregation). `compute_tier = "Free"` is confirmed available in South India. |
+| Storage account (HNS on) | media + keys + lake | Hierarchical namespace makes directory rename/delete atomic, which lakehouse engines depend on. |
+| Blob container `media` | product images | Public-read: images are served straight to browsers. Switches `IPictureService` to `AzurePictureService`. |
+| Blob container `dpkeys` | data-protection key ring | **Must exist before the app starts.** Without it the key ring falls back to the container filesystem and every restart signs out every user. |
+| Log Analytics + Application Insights | telemetry | Setting `ApplicationInsights__ConnectionString` activates the OpenTelemetry exporter `AddServiceDefaults()` already wires in. Do it on the first deployment, not after a performance problem. |
+| Container Apps environment | hosts the app and jobs | — |
+| Container app | the application | Port 8080, `/health/live` probes — see [8.11](#811-what-the-terraform-module-enforces). |
+| Container Apps Jobs | scheduled tasks | Only when `min_replicas = 0` — see [8.5](#85-scheduled-tasks-with-scale-to-zero). |
+| Azure Cache for Redis | cross-replica cache invalidation | Optional, **required** above one replica. |
+| Azure Files shares | `App_Data`, media uploads | Optional; must be seeded before mounting. |
+
+**Region.** Put the app, database and storage in the **same** region — cross-region database latency
+dominates every request. Not `westeurope`: it is capacity-restricted for new subscriptions while
+still appearing as a supported location, so a plan looks fine and the apply fails. Confirm what your
+subscription actually offers:
 
 ```bash
-export RG=grandnode-rg
-export LOC=southindia
-export ACR=grandnodeacr$RANDOM          # must be globally unique, lowercase alphanumeric
-export ENVNAME=grandnode-env
-export APPNAME=grandnode
-export STORAGE=grandnodestor$RANDOM     # must be globally unique, lowercase alphanumeric
-export MONGO_DB_NAME=grandnode
-
-az login
-az account set --subscription "<your subscription name or id>"
-az group create -n $RG -l $LOC
+az provider show -n Microsoft.App \
+  --query "resourceTypes[?resourceType=='managedEnvironments'].locations | [0]" -o tsv | sort > /tmp/ca.txt
+az provider show -n Microsoft.DocumentDB \
+  --query "resourceTypes[?resourceType=='mongoClusters'].locations | [0]" -o tsv | sort > /tmp/mc.txt
+comm -12 /tmp/ca.txt /tmp/mc.txt
 ```
+
+That gives the intersection of regions offering both services — but not capacity restrictions, which
+no API exposes.
 
 ---
 
-### 8.3 Step 2 — Container registry and image
+### 8.3 Deploying
+
+Terraform does not build images, so the sequence interleaves the two.
+
+**1. Provision.** The container app is created before its image exists, so its first revision fails
+to pull. That is expected.
 
 ```bash
-az acr create -n $ACR -g $RG --sku Basic --admin-enabled true
-
-# builds from the repository root, inside Azure
-az acr build -r $ACR -t grandnode:1 -f Dockerfile .
+cd infra/environments/prod
+terraform init
+terraform apply
 ```
 
-Run this from the repository root — the build context must include `src/` and
-`Directory.Packages.props`. The first build takes several minutes because it compiles every
-module and plugin.
-
-Tag each deployment with an incrementing version (`grandnode:2`, `:3`) rather than reusing
-`latest`, so a rollback is just a redeploy of the previous tag.
-
----
-
-### 8.4 Step 3 — MongoDB
-
-**Option A — Cosmos DB for MongoDB vCore**
+**2. Build and push**, from the repository root:
 
 ```bash
-az cosmosdb mongocluster create \
-  --resource-group $RG --cluster-name grandnode-mongo --location $LOC \
-  --administrator-login grandnodeadmin \
-  --administrator-login-password "<a strong password>" \
-  --server-version 7.0 \
-  --shard-node-tier M30 --shard-node-ha false \
-  --shard-node-disk-size-gb 128 --shard-node-count 1
+az acr build -r $(terraform -chdir=infra/environments/prod output -raw container_registry_name) \
+  -t grandnode:1 -f Dockerfile .
+
+terraform -chdir=infra/environments/prod apply \
+  -replace=module.grandnode.azurerm_container_app.this
 ```
 
-Then allow the Container Apps environment to reach it. For a first deployment you can permit
-Azure services; tighten this to a private endpoint before going live:
+`az acr build` takes roughly 8–9 minutes. ACR Tasks uses the classic Docker builder rather than
+BuildKit, so it builds *every* stage in the Dockerfile — including the admin publish stage the
+default target does not need.
+
+**3. Install**, with a warm replica. `enable_installer = true` and `min_replicas = 1`; a `check`
+block enforces that pairing, because the `/install` POST seeds the database inside a single HTTP
+request and times out on a cold start.
 
 ```bash
-az cosmosdb mongocluster firewall rule create \
-  --resource-group $RG --cluster-name grandnode-mongo \
-  --rule-name allow-azure --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
+terraform -chdir=infra/environments/prod output install_url
 ```
 
-Retrieve the connection string from the portal (Connection strings blade) and substitute your
-password. It looks like:
+- The MongoDB fields on the form are **ignored** when `ConnectionStrings__Mongodb` is set.
+- **Set Collation to `-None-`.** It does not default to it — `InstallController.PrepareModel`
+  pre-selects the entry matching your UI language, and Cosmos vCore rejects every non-empty value
+  with `Command create failed: Collation is currently not supported.`
+- Choose the administrator email and password. `admin@yourstore.com` / `123456` in `README.md`
+  belongs to the public demo site, not to your installation.
 
-```
-mongodb+srv://grandnodeadmin:<password>@grandnode-mongo.global.mongocluster.cosmos.azure.com/grandnode?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false
-```
-
-Append the database name (`/grandnode`) to the path — the application does not create it from a
-separate setting.
-
-**Option B — MongoDB Atlas**
-
-Create an M10 or larger cluster in the same Azure region, add a database user, and allow access
-from the Container Apps environment's outbound IPs (or use VNet peering). Connection string:
-
-```
-mongodb+srv://user:password@cluster.mongodb.net/grandnode?retryWrites=true&w=majority
-```
-
-Either way, verify the string ends with the database name and keep it for step 6.
-
----
-
-### 8.5 Step 4 — Storage for media and keys
-
-Two blob containers are needed for anything beyond a single throwaway instance. **Create them
-now** — the data-protection container must exist before the app starts, or key persistence fails.
+**4. Restart.** Not optional. `InstallController` calls `ResetCache()` on both the success and
+failure paths, which latches `DatabaseIsInstalled()` to false for the life of the process; the app
+then reports itself unhealthy and is removed from rotation.
 
 ```bash
-az storage account create -n $STORAGE -g $RG -l $LOC --sku Standard_LRS --kind StorageV2
-
-export STORAGE_CS=$(az storage account show-connection-string \
-  -n $STORAGE -g $RG --query connectionString -o tsv)
-
-az storage container create -n media      --connection-string "$STORAGE_CS" --public-access blob
-az storage container create -n dpkeys     --connection-string "$STORAGE_CS"
-```
-
-`media` is public-read because product images are served directly to browsers. `dpkeys` must
-stay private.
-
-Note the endpoint for later — it needs a **trailing slash**, because the application
-concatenates it with the container name:
-
-```bash
-export BLOB_ENDPOINT="https://$STORAGE.blob.core.windows.net/"
-```
-
----
-
-### 8.6 Step 5 — Application Insights
-
-```bash
-az monitor log-analytics workspace create -g $RG -n grandnode-logs -l $LOC
-
-export APPI_CS=$(az monitor app-insights component create \
-  --app grandnode-insights -g $RG -l $LOC \
-  --workspace grandnode-logs \
-  --query connectionString -o tsv)
-```
-
-Setting this connection string activates the OpenTelemetry exporter that `AddServiceDefaults()`
-already wires into every host — request durations, dependency calls and failure rates, with no
-code change. Do this on the first deployment, not after you have a performance problem.
-
----
-
-### 8.7 Step 6 — Container Apps environment and the app
-
-```bash
-az containerapp env create -n $ENVNAME -g $RG -l $LOC \
-  --logs-workspace-id $(az monitor log-analytics workspace show -g $RG -n grandnode-logs --query customerId -o tsv) \
-  --logs-workspace-key $(az monitor log-analytics workspace get-shared-keys -g $RG -n grandnode-logs --query primarySharedKey -o tsv)
-
-az containerapp create -n $APPNAME -g $RG \
-  --environment $ENVNAME \
-  --image $ACR.azurecr.io/grandnode:1 \
-  --registry-server $ACR.azurecr.io \
-  --target-port 8080 --ingress external \
-  --min-replicas 1 --max-replicas 1 \
-  --cpu 1 --memory 2Gi
-```
-
-`--target-port 8080` matches the image's `EXPOSE`. Keep `--max-replicas 1` until
-[section 8.9](#89-scaling-out) is done — additional replicas without Redis serve stale data.
-
-**Secrets and configuration**
-
-```bash
-az containerapp secret set -n $APPNAME -g $RG --secrets \
-  mongo="<the connection string from step 3>" \
-  storage="$STORAGE_CS" \
-  hashkey="$(openssl rand -hex 24)" \
-  backendkey="$(openssl rand -hex 24)" \
-  frontendkey="$(openssl rand -hex 24)" \
-  appinsights="$APPI_CS"
-
-az containerapp update -n $APPNAME -g $RG --set-env-vars \
-  ConnectionStrings__Mongodb=secretref:mongo \
-  ApplicationInsights__ConnectionString=secretref:appinsights \
-  Security__PasswordHashKey=secretref:hashkey \
-  BackendAPI__SecretKey=secretref:backendkey \
-  FrontendAPI__SecretKey=secretref:frontendkey \
-  Security__UseForwardedHeaders=true \
-  Security__CookieSecurePolicyAlways=true \
-  Security__UseHsts=true \
-  Application__DisplayFullErrorStack=false \
-  Azure__AzureBlobStorageConnectionString=secretref:storage \
-  Azure__AzureBlobStorageContainerName=media \
-  Azure__AzureBlobStorageEndPoint="$BLOB_ENDPOINT" \
-  Azure__PersistKeysToAzureBlobStorage=true \
-  Azure__PersistKeysAzureBlobStorageConnectionString=secretref:storage \
-  Azure__DataProtectionContainerName=dpkeys \
-  Azure__DataProtectionBlobName=keys.xml
-```
-
-Why each of the non-obvious ones:
-
-- `Security__UseForwardedHeaders=true` — Container Apps ingress terminates TLS. Without this the
-  app sees plain HTTP and generates wrong redirects and cookie flags.
-- `Security__PasswordHashKey` — the PBKDF2 pepper. **Set it before the first customer registers.**
-  Changing it later invalidates every existing password hash.
-- `Azure__PersistKeysToAzureBlobStorage` — without it, the data-protection key ring lives on the
-  container filesystem and every restart signs out every user.
-- `Azure__AzureBlobStorageConnectionString` — switches `IPictureService` to `AzurePictureService`,
-  so product images survive a restart.
-- The two API keys are only enforced when `FeatureManagement__Grand.Module.Api=true`, but setting
-  them now means enabling the API later cannot fail startup.
-
-Get the URL:
-
-```bash
-az containerapp show -n $APPNAME -g $RG --query properties.configuration.ingress.fqdn -o tsv
-```
-
----
-
-### 8.8 Step 7 — First-run installation
-
-Browse to `https://<fqdn>`. The application redirects to `/install`.
-
-- The MongoDB connection fields on that form are **ignored** when `ConnectionStrings__Mongodb`
-  is set — `InstallController` prefers the configured value. Fill them if client-side validation
-  insists, but the configured string is what gets used.
-- Enter the **administrator email and password**. These become your admin credentials; the form
-  pre-fills `admin@yourstore.com` but the password is yours to choose. The
-  `admin@yourstore.com` / `123456` pair in `README.md` belongs to the public demo site only.
-- Choose whether to load sample data. Skip it for production.
-
-- **Collation: choose `-None-` when the database is Cosmos DB for MongoDB vCore.** The dropdown
-  does *not* default to it — `InstallController.PrepareModel` pre-selects the entry matching the
-  UI language, so it arrives showing e.g. "English" and looks already answered. vCore rejects
-  collation on collection creation and the install fails with
-  `Command create failed: Collation is currently not supported.` MongoDB Atlas accepts any value.
-
-Installation seeds roughly 110 collections plus about 170 indexes, and takes a minute or two.
-
-**Restart the app once installation finishes.** This is not optional. `InstallController` calls
-`DataSettingsManager.Instance.ResetCache()` on both the success and the failure path, and
-`ResetCache()` can only force `_databaseIsInstalled` to *false* — never back to true without a new
-process. `StartupHealthCheck` then reports `Database connection is not configured.` for the rest of
-the process lifetime, Container Apps stops routing traffic to the replica, and **every request
-times out**. It looks like a hang or a cold start; it is neither, and it does not self-recover.
-
-```bash
-az containerapp revision restart -n $APPNAME -g $RG \
-  --revision $(az containerapp revision list -n $APPNAME -g $RG \
+az containerapp revision restart -g rg-grandnode-prod -n ca-grandnode-prod \
+  --revision $(az containerapp revision list -g rg-grandnode-prod -n ca-grandnode-prod \
     --query "[?properties.active].name | [0]" -o tsv)
 ```
 
 The same restart is the recovery after any *failed* install attempt, before retrying.
 
-**Then harden it:**
-
-```bash
-az containerapp update -n $APPNAME -g $RG --set-env-vars \
-  FeatureManagement__Grand.Module.Installer=false
-```
-
-The installer intercepts every path when it thinks the database is empty; leaving it enabled in
-production is an unnecessary exposure.
-
-The storefront is now at `https://<fqdn>/` and the admin panel at `https://<fqdn>/admin`.
+**5. Close the installer and return to steady state**: `enable_installer = false`, and either
+`min_replicas = 1` or `min_replicas = 0` with `scheduled_task_jobs` defined.
 
 ---
 
-### 8.9 Scaling out
+### 8.4 Scaling out
 
 Before raising `--max-replicas` above 1, three things must be in place, because the application's
 cache is **per-instance** — `RedisMessageCacheManager` extends `MemoryCacheBase` and uses Redis
@@ -751,7 +632,63 @@ atomic compare-and-set so only one replica claims each run.
 
 ---
 
-### 8.10 Optional — split storefront / admin
+### 8.5 Scheduled tasks with scale-to-zero
+
+GrandNode hosts its scheduled tasks as `BackgroundService` loops **inside the web host**
+(`Grand.Web/Program.cs` calls `RegisterTasks`). They only advance while a web instance is running,
+so with `min_replicas = 0` an idle deployment silently stops sending queued email, expiring unpaid
+orders, ending auctions and draining the carrier event outbox — and nothing reports that it has
+stopped.
+
+Two ways to resolve it.
+
+**Keep one replica warm.** `min_replicas = 1`. Simplest, always correct, and costs an always-on
+container that exceeds the Container Apps free grant.
+
+**Or run each task as a Container Apps Job.** The image accepts `--run-task <name>`, which executes
+one task to completion and exits without starting Kestrel:
+
+```bash
+dotnet Grand.Web.dll --run-task "Send emails"
+```
+
+A job runs on its own cron, is billed only while executing, and preserves scale-to-zero for the web
+app. In Terraform:
+
+```hcl
+min_replicas = 0
+
+scheduled_task_jobs = {
+  "Send emails"                      = { cron = "*/5 * * * *", timeout_seconds = 900 }
+  "Cancel unpaid and pending orders" = { cron = "0 * * * *" }
+  "End of the auctions"              = { cron = "*/15 * * * *" }
+  "Delete guests"                    = { cron = "0 3 * * *" }
+  "Update currency exchange rates"   = { cron = "0 4 * * *" }
+  "Generate sitemap XML file"        = { cron = "0 2 * * 0", timeout_seconds = 1800 }
+}
+```
+
+Four things that make this safe rather than merely convenient:
+
+- **Keys must equal the `ScheduleTaskName` in the database**, which is also the DI registration key.
+  A mismatch means the job runs and finds nothing to do.
+- **Running alongside a web replica is safe.** `ScheduleTaskService.TryClaimTaskRun` does an atomic
+  compare-and-set on `LastStartUtc`, so whichever process claims a run first executes it and the
+  other stands down. No coordination was added for this; the lease already existed for
+  multi-replica hosting.
+- **The admin switch is honoured.** The runner reads the `ScheduleTask` row, so disabling a task in
+  the admin panel stops the job too — not only the in-process loop.
+- **Exit codes are meaningful.** Disabled or not-yet-seeded exits 0, because those are operator
+  choices rather than faults. A missing DI registration or a thrown task exits 1, so a scheduler
+  alerts instead of a job no-opping forever unnoticed.
+
+Migrations stay with the storefront: every job sets `FeatureManagement__Grand.Module.Migration=false`,
+because migrations have no cross-process lock and a job racing the web host at startup has nothing
+to arbitrate.
+
+---
+
+### 8.6 Optional — split storefront / admin
 
 Only worth doing for ingress isolation: Container Apps ingress restrictions apply to a whole app,
 so a single container cannot restrict `/admin` alone without Front Door or Application Gateway in
@@ -791,7 +728,7 @@ standalone admin container.
 
 ---
 
-### 8.11 Alternative — App Service
+### 8.7 Alternative — App Service
 
 **Containers:** deploy the same image to Linux App Service and add `WEBSITES_PORT=8080`. Set the
 health check path to `/health/ready`. All the environment variables above apply unchanged.
@@ -805,7 +742,7 @@ storage. The blob settings remain correct for scale-out.
 
 ---
 
-### 8.12 Custom domain and TLS
+### 8.8 Custom domain and TLS
 
 ```bash
 az containerapp hostname add -n $APPNAME -g $RG --hostname shop.example.com
@@ -819,7 +756,7 @@ Configuration → Stores so generated links and emails use the right host.
 
 ---
 
-### 8.13 Updating a deployment
+### 8.9 Updating a deployment
 
 ```bash
 az acr build -r $ACR -t grandnode:2 -f Dockerfile .
@@ -840,7 +777,7 @@ exactly one app, and prefer single-revision mode for upgrades that carry migrati
 
 ---
 
-### 8.14 Troubleshooting
+### 8.10 Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
@@ -852,8 +789,11 @@ exactly one app, and prefer single-revision mode for upgrades that carry migrati
 | Redirect loop, or links using `http://` | `Security__UseForwardedHeaders` not set to `true`. |
 | Every page 302s to `/errorpage.htm`; logs show an antiforgery `SecurePolicy = Always` error | `Security__ForceUseHTTPS` not set — see [section 5.2](#52-behind-a-reverse-proxy-or-cloud-ingress). |
 | Install fails with `Command create failed: Collation is currently not supported.` | Cosmos vCore rejects collation. Re-run the installer with Collation = `-None-`. |
-| Every request times out after the installer ran (success **or** failure) | The readiness check is pinned unhealthy by `ResetCache()`. Restart the revision — see [section 8.8](#88-step-7--first-run-installation). |
+| Every request times out after the installer ran (success **or** failure) | The readiness check is pinned unhealthy by `ResetCache()`. Restart the revision — see [section 8.3](#83-deploying). |
 | First request after an idle period is very slow | `min_replicas = 0`. Expected; set to 1 to avoid it. |
+| Queued email never sends, unpaid orders never expire, outbox never drains | `min_replicas = 0` with no `scheduled_task_jobs` — background work is hosted in the web process. See [8.5](#85-scheduled-tasks-with-scale-to-zero). |
+| A scheduled-task job runs and does nothing | Its key does not match `ScheduleTaskName` in the database, or the task row is disabled in the admin panel. |
+| App will not start after enabling volumes | The Azure Files share was mounted before being seeded, hiding `App_Data/appsettings.json`. |
 | Admin theme picker is empty | Expected in a split admin container — see [section 10](#10-known-constraints). |
 
 Useful commands:
@@ -863,6 +803,31 @@ az containerapp logs show -n $APPNAME -g $RG --follow
 az containerapp revision list -n $APPNAME -g $RG -o table
 curl -i https://<fqdn>/health/ready
 ```
+
+---
+
+### 8.11 What the Terraform module enforces
+
+Four `check` blocks encode the failures this deployment actually hit, so they surface at plan time
+instead of in production:
+
+| Check | Fails when | Why it exists |
+|---|---|---|
+| `installer_needs_a_warm_replica` | `enable_installer = true` with `min_replicas = 0` | The `/install` POST seeds the database inside a single HTTP request; at scale-to-zero it cold-starts first and the browser times out before the app sees it. |
+| `background_work_has_a_home` | `min_replicas = 0` and no `scheduled_task_jobs` | Scheduled tasks live in the web process — see [8.5](#85-scheduled-tasks-with-scale-to-zero). |
+| `redis_required_for_scale_out` | `max_replicas > 1` with `enable_redis = false` | The cache is per-instance; replicas would serve stale prices and stock. Correctness, not performance. |
+| `volumes_must_be_seeded_first` | `enable_persistent_volumes = true` with `volumes_seeded = false` | An Azure Files mount replaces the directory the image ships. `/app/App_Data` carries `appsettings.json`, without which the host will not start. |
+
+Two further settings the module applies that are easy to get wrong by hand:
+
+- **Readiness probes point at `/health/live`, not `/health/ready`.** `/health/ready` runs
+  `StartupHealthCheck`, whose `DatabaseIsInstalled()` value is latched to false by
+  `InstallController`'s `ResetCache()` — on both the success *and* failure paths, with no way back
+  without a new process. Wiring an orchestrator's readiness probe to it removes the replica from
+  rotation permanently the moment anyone runs the installer.
+- **A `startup_probe` gates liveness for up to five minutes.** The app loads every plugin and module
+  assembly at boot; on a small CPU allocation a slow cold start otherwise reads as a liveness
+  failure and the container is killed and retried forever.
 
 ---
 

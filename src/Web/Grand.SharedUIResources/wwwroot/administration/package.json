@@ -1,0 +1,23 @@
+{
+  "name": "grandnode-admin-vendor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Audit manifest for the admin panel's vendored front-end libraries. NOT a build input - see README.md.",
+  "scripts": {
+    "audit": "npm audit --omit=dev",
+    "outdated": "npm outdated"
+  },
+  "dependencies": {
+    "bootstrap": "4.5.2",
+    "bootstrap-treeview": "1.2.0",
+    "chart.js": "2.9.4",
+    "codemirror": "5.65.7",
+    "jquery": "2.2.4",
+    "jquery-ui": "1.12.1",
+    "jquery-validation-unobtrusive": "3.2.11",
+    "magnific-popup": "1.1.0",
+    "moment": "2.29.4",
+    "summernote": "0.8.18",
+    "typeahead.js": "0.11.1"
+  }
+}

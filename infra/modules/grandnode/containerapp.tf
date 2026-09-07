@@ -271,3 +271,14 @@ check "volumes_must_be_seeded_first" {
     error_message = "enable_persistent_volumes = true requires volumes_seeded = true, confirming the appdata share contains appsettings.json. Mounting an unseeded share stops the app booting."
   }
 }
+
+# Background work has to run somewhere. Scheduled tasks are BackgroundService loops
+# inside the web host, so at min_replicas = 0 they only advance while traffic happens
+# to be keeping an instance alive - queued email, unpaid-order expiry and the carrier
+# outbox all stall silently. Either keep one replica warm, or run the tasks as jobs.
+check "background_work_has_a_home" {
+  assert {
+    condition     = var.min_replicas >= 1 || length(var.scheduled_task_jobs) > 0
+    error_message = "min_replicas = 0 stops all scheduled tasks: they are hosted in the web process. Set min_replicas = 1, or define scheduled_task_jobs to run them as Container Apps Jobs."
+  }
+}

@@ -29,6 +29,34 @@ module "grandnode" {
 
   enable_redis = false
 
+  # Scheduled tasks run as jobs rather than in the web host, which is what makes
+  # min_replicas = 0 viable: background work no longer depends on a web instance
+  # happening to be awake. Keys must equal the ScheduleTaskName in the database.
+  # Safe alongside a web replica - TryClaimTaskRun arbitrates with an atomic
+  # compare-and-set, so only one of them executes a given run.
+  scheduled_task_jobs = {
+    "Send emails" = {
+      cron            = "*/5 * * * *"
+      timeout_seconds = 900
+    }
+    "Cancel unpaid and pending orders" = {
+      cron = "0 * * * *"
+    }
+    "End of the auctions" = {
+      cron = "*/15 * * * *"
+    }
+    "Delete guests" = {
+      cron = "0 3 * * *"
+    }
+    "Update currency exchange rates" = {
+      cron = "0 4 * * *"
+    }
+    "Generate sitemap XML file" = {
+      cron            = "0 2 * * 0"
+      timeout_seconds = 1800
+    }
+  }
+
   # Apply once false to create the shares, seed them from the image's own
   # App_Data and wwwroot/assets/images, then set both true.
   enable_persistent_volumes = false
