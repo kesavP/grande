@@ -1,0 +1,22 @@
+{
+  "container_registry_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "acrgrandnodeprod"
+  },
+  "mongo_connection_string": {
+    "sensitive": true,
+    "type": "string",
+    "value": "mongodb+srv://grandnodeadmin:92F9CQcc5ECP27f1rfd9UkvybLTUDr6q@mongo-grandnode-prod.global.mongocluster.cosmos.azure.com/grandnode?tls=true\u0026authMechanism=SCRAM-SHA-256\u0026retrywrites=false\u0026maxIdleTimeMS=120000"
+  },
+  "resource_group_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rg-grandnode-prod"
+  },
+  "storage_account_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "stgrandnodeprod"
+  }
+}

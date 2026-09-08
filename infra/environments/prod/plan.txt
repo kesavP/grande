@@ -1,0 +1,1206 @@
+module.grandnode.azurerm_resource_group.this: Refreshing state... [id=/subscriptions/604f430d-a081-4f6c-8e11-79c7b9f14e91/resourceGroups/rg-grandnode-prod]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+
+Terraform will perform the following actions:
+
+  # module.grandnode.azurerm_application_insights.this will be created
+  + resource "azurerm_application_insights" "this" {
+      + app_id                                = (known after apply)
+      + application_type                      = "web"
+      + connection_string                     = (sensitive value)
+      + daily_data_cap_in_gb                  = 0.5
+      + daily_data_cap_notifications_disabled = (known after apply)
+      + daily_data_cap_notifications_enabled  = (known after apply)
+      + disable_ip_masking                    = (known after apply)
+      + force_customer_storage_for_profiler   = false
+      + id                                    = (known after apply)
+      + instrumentation_key                   = (sensitive value)
+      + internet_ingestion_enabled            = true
+      + internet_query_enabled                = true
+      + ip_masking_enabled                    = (known after apply)
+      + local_authentication_disabled         = (known after apply)
+      + local_authentication_enabled          = (known after apply)
+      + location                              = "southindia"
+      + name                                  = "appi-grandnode-prod"
+      + resource_group_name                   = "rg-grandnode-prod"
+      + retention_in_days                     = 30
+      + sampling_percentage                   = 100
+      + tags                                  = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+      + workspace_id                          = (known after apply)
+    }
+
+  # module.grandnode.azurerm_container_app.this will be created
+  + resource "azurerm_container_app" "this" {
+      + container_app_environment_id  = (known after apply)
+      + custom_domain_verification_id = (sensitive value)
+      + id                            = (known after apply)
+      + latest_revision_fqdn          = (known after apply)
+      + latest_revision_name          = (known after apply)
+      + location                      = (known after apply)
+      + name                          = "ca-grandnode-prod"
+      + outbound_ip_addresses         = (known after apply)
+      + resource_group_name           = "rg-grandnode-prod"
+      + revision_mode                 = "Single"
+      + tags                          = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + ingress {
+          + allow_insecure_connections = false
+          + custom_domain              = (known after apply)
+          + external_enabled           = true
+          + fqdn                       = (known after apply)
+          + target_port                = 8080
+          + transport                  = "auto"
+
+          + traffic_weight {
+              + latest_revision = true
+              + percentage      = 100
+            }
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + cooldown_period_in_seconds       = 300
+          + max_replicas                     = 1
+          + min_replicas                     = 0
+          + polling_interval_in_seconds      = 30
+          + revision_suffix                  = (known after apply)
+          + termination_grace_period_seconds = 0
+
+          + container {
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "grandnode"
+
+              + env {
+                  + name  = "Application__DisplayFullErrorStack"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "Azure__DataProtectionBlobName"
+                  + value = "keys.xml"
+                }
+              + env {
+                  + name  = "Azure__DataProtectionContainerName"
+                  + value = "dpkeys"
+                }
+              + env {
+                  + name  = "Azure__PersistKeysToAzureBlobStorage"
+                  + value = "true"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Api"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "Security__CookieSecurePolicyAlways"
+                  + value = "true"
+                }
+              + env {
+                  + name  = "Security__ForceUseHTTPS"
+                  + value = "true"
+                }
+              + env {
+                  + name  = "Security__UseForwardedHeaders"
+                  + value = "true"
+                }
+              + env {
+                  + name  = "Security__UseHsts"
+                  + value = "true"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name        = "Azure__PersistKeysAzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name        = "BackendAPI__SecretKey"
+                  + secret_name = "backend-api-secret"
+                }
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "FrontendAPI__SecretKey"
+                  + secret_name = "frontend-api-secret"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+
+              + liveness_probe {
+                  + failure_count_threshold          = 3
+                  + initial_delay                    = 1
+                  + interval_seconds                 = 30
+                  + path                             = "/health/live"
+                  + port                             = 8080
+                  + termination_grace_period_seconds = (known after apply)
+                  + timeout                          = 1
+                  + transport                        = "HTTP"
+                }
+
+              + readiness_probe {
+                  + failure_count_threshold = 3
+                  + initial_delay           = 0
+                  + interval_seconds        = 10
+                  + path                    = "/health/live"
+                  + port                    = 8080
+                  + success_count_threshold = 3
+                  + timeout                 = 1
+                  + transport               = "HTTP"
+                }
+
+              + startup_probe {
+                  + failure_count_threshold          = 30
+                  + initial_delay                    = 0
+                  + interval_seconds                 = 10
+                  + path                             = "/health/live"
+                  + port                             = 8080
+                  + termination_grace_period_seconds = (known after apply)
+                  + timeout                          = 1
+                  + transport                        = "HTTP"
+                }
+            }
+
+          + http_scale_rule {
+              + concurrent_requests = "50"
+              + name                = "http-concurrency"
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_app_environment.this will be created
+  + resource "azurerm_container_app_environment" "this" {
+      + custom_domain_verification_id    = (known after apply)
+      + default_domain                   = (known after apply)
+      + docker_bridge_cidr               = (known after apply)
+      + id                               = (known after apply)
+      + internal_load_balancer_enabled   = false
+      + location                         = "southindia"
+      + log_analytics_workspace_id       = (known after apply)
+      + logs_destination                 = (known after apply)
+      + mutual_tls_enabled               = false
+      + name                             = "cae-grandnode-prod"
+      + platform_reserved_cidr           = (known after apply)
+      + platform_reserved_dns_ip_address = (known after apply)
+      + public_network_access            = (known after apply)
+      + resource_group_name              = "rg-grandnode-prod"
+      + static_ip_address                = (known after apply)
+      + tags                             = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+      + zone_redundancy_enabled          = false
+    }
+
+  # module.grandnode.azurerm_container_app_job.task["Cancel unpaid and pending orders"] will be created
+  + resource "azurerm_container_app_job" "task" {
+      + container_app_environment_id = (known after apply)
+      + event_stream_endpoint        = (known after apply)
+      + id                           = (known after apply)
+      + location                     = "southindia"
+      + name                         = "caj-cancel-unpaid-and-pe-prod"
+      + outbound_ip_addresses        = (known after apply)
+      + replica_retry_limit          = 1
+      + replica_timeout_in_seconds   = 600
+      + resource_group_name          = "rg-grandnode-prod"
+      + tags                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + schedule_trigger_config {
+          + cron_expression          = "0 * * * *"
+          + parallelism              = 1
+          + replica_completion_count = 1
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + container {
+              + command           = [
+                  + "dotnet",
+                  + "Grand.Web.dll",
+                  + "--run-task",
+                  + "Cancel unpaid and pending orders",
+                ]
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "task"
+
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Migration"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_app_job.task["Delete guests"] will be created
+  + resource "azurerm_container_app_job" "task" {
+      + container_app_environment_id = (known after apply)
+      + event_stream_endpoint        = (known after apply)
+      + id                           = (known after apply)
+      + location                     = "southindia"
+      + name                         = "caj-delete-guests-prod"
+      + outbound_ip_addresses        = (known after apply)
+      + replica_retry_limit          = 1
+      + replica_timeout_in_seconds   = 600
+      + resource_group_name          = "rg-grandnode-prod"
+      + tags                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + schedule_trigger_config {
+          + cron_expression          = "0 3 * * *"
+          + parallelism              = 1
+          + replica_completion_count = 1
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + container {
+              + command           = [
+                  + "dotnet",
+                  + "Grand.Web.dll",
+                  + "--run-task",
+                  + "Delete guests",
+                ]
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "task"
+
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Migration"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_app_job.task["End of the auctions"] will be created
+  + resource "azurerm_container_app_job" "task" {
+      + container_app_environment_id = (known after apply)
+      + event_stream_endpoint        = (known after apply)
+      + id                           = (known after apply)
+      + location                     = "southindia"
+      + name                         = "caj-end-of-the-auctions-prod"
+      + outbound_ip_addresses        = (known after apply)
+      + replica_retry_limit          = 1
+      + replica_timeout_in_seconds   = 600
+      + resource_group_name          = "rg-grandnode-prod"
+      + tags                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + schedule_trigger_config {
+          + cron_expression          = "*/15 * * * *"
+          + parallelism              = 1
+          + replica_completion_count = 1
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + container {
+              + command           = [
+                  + "dotnet",
+                  + "Grand.Web.dll",
+                  + "--run-task",
+                  + "End of the auctions",
+                ]
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "task"
+
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Migration"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_app_job.task["Generate sitemap XML file"] will be created
+  + resource "azurerm_container_app_job" "task" {
+      + container_app_environment_id = (known after apply)
+      + event_stream_endpoint        = (known after apply)
+      + id                           = (known after apply)
+      + location                     = "southindia"
+      + name                         = "caj-generate-sitemap-xml-prod"
+      + outbound_ip_addresses        = (known after apply)
+      + replica_retry_limit          = 1
+      + replica_timeout_in_seconds   = 1800
+      + resource_group_name          = "rg-grandnode-prod"
+      + tags                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + schedule_trigger_config {
+          + cron_expression          = "0 2 * * 0"
+          + parallelism              = 1
+          + replica_completion_count = 1
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + container {
+              + command           = [
+                  + "dotnet",
+                  + "Grand.Web.dll",
+                  + "--run-task",
+                  + "Generate sitemap XML file",
+                ]
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "task"
+
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Migration"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_app_job.task["Send emails"] will be created
+  + resource "azurerm_container_app_job" "task" {
+      + container_app_environment_id = (known after apply)
+      + event_stream_endpoint        = (known after apply)
+      + id                           = (known after apply)
+      + location                     = "southindia"
+      + name                         = "caj-send-emails-prod"
+      + outbound_ip_addresses        = (known after apply)
+      + replica_retry_limit          = 1
+      + replica_timeout_in_seconds   = 900
+      + resource_group_name          = "rg-grandnode-prod"
+      + tags                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + schedule_trigger_config {
+          + cron_expression          = "*/5 * * * *"
+          + parallelism              = 1
+          + replica_completion_count = 1
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + container {
+              + command           = [
+                  + "dotnet",
+                  + "Grand.Web.dll",
+                  + "--run-task",
+                  + "Send emails",
+                ]
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "task"
+
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Migration"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_app_job.task["Update currency exchange rates"] will be created
+  + resource "azurerm_container_app_job" "task" {
+      + container_app_environment_id = (known after apply)
+      + event_stream_endpoint        = (known after apply)
+      + id                           = (known after apply)
+      + location                     = "southindia"
+      + name                         = "caj-update-currency-exch-prod"
+      + outbound_ip_addresses        = (known after apply)
+      + replica_retry_limit          = 1
+      + replica_timeout_in_seconds   = 600
+      + resource_group_name          = "rg-grandnode-prod"
+      + tags                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + registry {
+          + password_secret_name = "registry-password"
+          + server               = (known after apply)
+          + username             = (known after apply)
+        }
+
+      + schedule_trigger_config {
+          + cron_expression          = "0 4 * * *"
+          + parallelism              = 1
+          + replica_completion_count = 1
+        }
+
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+      + secret {
+          # At least one attribute in this block is (or was) sensitive,
+          # so its contents will not be displayed.
+        }
+
+      + template {
+          + container {
+              + command           = [
+                  + "dotnet",
+                  + "Grand.Web.dll",
+                  + "--run-task",
+                  + "Update currency exchange rates",
+                ]
+              + cpu               = 0.5
+              + ephemeral_storage = (known after apply)
+              + image             = (known after apply)
+              + memory            = "1Gi"
+              + name              = "task"
+
+              + env {
+                  + name        = "ConnectionStrings__Mongodb"
+                  + secret_name = "mongo-connection-string"
+                }
+              + env {
+                  + name        = "ApplicationInsights__ConnectionString"
+                  + secret_name = "appinsights-connection-string"
+                }
+              + env {
+                  + name        = "Security__PasswordHashKey"
+                  + secret_name = "password-hash-key"
+                }
+              + env {
+                  + name        = "Azure__AzureBlobStorageConnectionString"
+                  + secret_name = "storage-connection-string"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageContainerName"
+                  + value = "media"
+                }
+              + env {
+                  + name  = "Azure__AzureBlobStorageEndPoint"
+                  + value = (known after apply)
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Migration"
+                  + value = "false"
+                }
+              + env {
+                  + name  = "FeatureManagement__Grand.Module.Installer"
+                  + value = "false"
+                }
+            }
+        }
+    }
+
+  # module.grandnode.azurerm_container_registry.this will be created
+  + resource "azurerm_container_registry" "this" {
+      + admin_enabled                                = true
+      + admin_password                               = (sensitive value)
+      + admin_username                               = (known after apply)
+      + azuread_authentication_as_arm_policy_enabled = true
+      + data_endpoint_host_names                     = (known after apply)
+      + encryption                                   = (known after apply)
+      + export_policy_enabled                        = true
+      + id                                           = (known after apply)
+      + location                                     = "southindia"
+      + login_server                                 = (known after apply)
+      + name                                         = "acrgrandnodeprod"
+      + network_rule_bypass_for_tasks_enabled        = false
+      + network_rule_bypass_option                   = "AzureServices"
+      + network_rule_set                             = (known after apply)
+      + public_network_access_enabled                = true
+      + resource_group_name                          = "rg-grandnode-prod"
+      + role_assignment_mode                         = "LegacyRegistryPermissions"
+      + sku                                          = "Basic"
+      + tags                                         = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+      + trust_policy_enabled                         = false
+      + zone_redundancy_enabled                      = false
+    }
+
+  # module.grandnode.azurerm_log_analytics_workspace.this will be created
+  + resource "azurerm_log_analytics_workspace" "this" {
+      + allow_resource_only_permissions = true
+      + daily_quota_gb                  = 0.5
+      + id                              = (known after apply)
+      + internet_ingestion_enabled      = true
+      + internet_query_enabled          = true
+      + local_authentication_disabled   = (known after apply)
+      + local_authentication_enabled    = true
+      + location                        = "southindia"
+      + name                            = "log-grandnode-prod"
+      + primary_shared_key              = (sensitive value)
+      + resource_group_name             = "rg-grandnode-prod"
+      + retention_in_days               = 30
+      + secondary_shared_key            = (sensitive value)
+      + sku                             = "PerGB2018"
+      + tags                            = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+      + workspace_id                    = (known after apply)
+    }
+
+  # module.grandnode.azurerm_mongo_cluster.this will be created
+  + resource "azurerm_mongo_cluster" "this" {
+      + administrator_password = (sensitive value)
+      + administrator_username = "grandnodeadmin"
+      + authentication_methods = (known after apply)
+      + compute_tier           = "Free"
+      + connection_strings     = (sensitive value)
+      + create_mode            = "Default"
+      + data_api_mode_enabled  = false
+      + high_availability_mode = "Disabled"
+      + id                     = (known after apply)
+      + location               = "southindia"
+      + name                   = "mongo-grandnode-prod"
+      + public_network_access  = "Enabled"
+      + resource_group_name    = "rg-grandnode-prod"
+      + shard_count            = 1
+      + storage_size_in_gb     = 32
+      + storage_type           = "PremiumSSD"
+      + tags                   = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+      + version                = "7.0"
+    }
+
+  # module.grandnode.azurerm_mongo_cluster_firewall_rule.allow_azure[0] will be created
+  + resource "azurerm_mongo_cluster_firewall_rule" "allow_azure" {
+      + end_ip_address   = "0.0.0.0"
+      + id               = (known after apply)
+      + mongo_cluster_id = (known after apply)
+      + name             = "allow-azure-services"
+      + start_ip_address = "0.0.0.0"
+    }
+
+  # module.grandnode.azurerm_resource_group.this will be updated in-place
+  ~ resource "azurerm_resource_group" "this" {
+        id         = "/subscriptions/604f430d-a081-4f6c-8e11-79c7b9f14e91/resourceGroups/rg-grandnode-prod"
+        name       = "rg-grandnode-prod"
+      ~ tags       = {
+            "application" = "grandnode"
+            "environment" = "prod"
+            "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+        # (2 unchanged attributes hidden)
+    }
+
+  # module.grandnode.azurerm_storage_account.this will be created
+  + resource "azurerm_storage_account" "this" {
+      + access_tier                        = (known after apply)
+      + account_kind                       = "StorageV2"
+      + account_replication_type           = "LRS"
+      + account_tier                       = "Standard"
+      + allow_nested_items_to_be_public    = true
+      + cross_tenant_replication_enabled   = false
+      + default_to_oauth_authentication    = false
+      + dns_endpoint_type                  = "Standard"
+      + https_traffic_only_enabled         = true
+      + id                                 = (known after apply)
+      + infrastructure_encryption_enabled  = false
+      + is_hns_enabled                     = true
+      + large_file_share_enabled           = (known after apply)
+      + local_user_enabled                 = true
+      + location                           = "southindia"
+      + min_tls_version                    = "TLS1_2"
+      + name                               = "stgrandnodeprod"
+      + nfsv3_enabled                      = false
+      + primary_access_key                 = (sensitive value)
+      + primary_blob_connection_string     = (sensitive value)
+      + primary_blob_endpoint              = (known after apply)
+      + primary_blob_host                  = (known after apply)
+      + primary_blob_internet_endpoint     = (known after apply)
+      + primary_blob_internet_host         = (known after apply)
+      + primary_blob_microsoft_endpoint    = (known after apply)
+      + primary_blob_microsoft_host        = (known after apply)
+      + primary_connection_string          = (sensitive value)
+      + primary_dfs_endpoint               = (known after apply)
+      + primary_dfs_host                   = (known after apply)
+      + primary_dfs_internet_endpoint      = (known after apply)
+      + primary_dfs_internet_host          = (known after apply)
+      + primary_dfs_microsoft_endpoint     = (known after apply)
+      + primary_dfs_microsoft_host         = (known after apply)
+      + primary_file_endpoint              = (known after apply)
+      + primary_file_host                  = (known after apply)
+      + primary_file_internet_endpoint     = (known after apply)
+      + primary_file_internet_host         = (known after apply)
+      + primary_file_microsoft_endpoint    = (known after apply)
+      + primary_file_microsoft_host        = (known after apply)
+      + primary_location                   = (known after apply)
+      + primary_queue_endpoint             = (known after apply)
+      + primary_queue_host                 = (known after apply)
+      + primary_queue_microsoft_endpoint   = (known after apply)
+      + primary_queue_microsoft_host       = (known after apply)
+      + primary_table_endpoint             = (known after apply)
+      + primary_table_host                 = (known after apply)
+      + primary_table_microsoft_endpoint   = (known after apply)
+      + primary_table_microsoft_host       = (known after apply)
+      + primary_web_endpoint               = (known after apply)
+      + primary_web_host                   = (known after apply)
+      + primary_web_internet_endpoint      = (known after apply)
+      + primary_web_internet_host          = (known after apply)
+      + primary_web_microsoft_endpoint     = (known after apply)
+      + primary_web_microsoft_host         = (known after apply)
+      + public_network_access_enabled      = true
+      + queue_encryption_key_type          = "Service"
+      + resource_group_name                = "rg-grandnode-prod"
+      + secondary_access_key               = (sensitive value)
+      + secondary_blob_connection_string   = (sensitive value)
+      + secondary_blob_endpoint            = (known after apply)
+      + secondary_blob_host                = (known after apply)
+      + secondary_blob_internet_endpoint   = (known after apply)
+      + secondary_blob_internet_host       = (known after apply)
+      + secondary_blob_microsoft_endpoint  = (known after apply)
+      + secondary_blob_microsoft_host      = (known after apply)
+      + secondary_connection_string        = (sensitive value)
+      + secondary_dfs_endpoint             = (known after apply)
+      + secondary_dfs_host                 = (known after apply)
+      + secondary_dfs_internet_endpoint    = (known after apply)
+      + secondary_dfs_internet_host        = (known after apply)
+      + secondary_dfs_microsoft_endpoint   = (known after apply)
+      + secondary_dfs_microsoft_host       = (known after apply)
+      + secondary_file_endpoint            = (known after apply)
+      + secondary_file_host                = (known after apply)
+      + secondary_file_internet_endpoint   = (known after apply)
+      + secondary_file_internet_host       = (known after apply)
+      + secondary_file_microsoft_endpoint  = (known after apply)
+      + secondary_file_microsoft_host      = (known after apply)
+      + secondary_location                 = (known after apply)
+      + secondary_queue_endpoint           = (known after apply)
+      + secondary_queue_host               = (known after apply)
+      + secondary_queue_microsoft_endpoint = (known after apply)
+      + secondary_queue_microsoft_host     = (known after apply)
+      + secondary_table_endpoint           = (known after apply)
+      + secondary_table_host               = (known after apply)
+      + secondary_table_microsoft_endpoint = (known after apply)
+      + secondary_table_microsoft_host     = (known after apply)
+      + secondary_web_endpoint             = (known after apply)
+      + secondary_web_host                 = (known after apply)
+      + secondary_web_internet_endpoint    = (known after apply)
+      + secondary_web_internet_host        = (known after apply)
+      + secondary_web_microsoft_endpoint   = (known after apply)
+      + secondary_web_microsoft_host       = (known after apply)
+      + sftp_enabled                       = false
+      + shared_access_key_enabled          = true
+      + table_encryption_key_type          = "Service"
+      + tags                               = {
+          + "application" = "grandnode"
+          + "environment" = "prod"
+          + "managed_by"  = "terraform"
+          + "owner"       = "platform"
+        }
+
+      + blob_properties (known after apply)
+
+      + network_rules (known after apply)
+
+      + queue_properties (known after apply)
+
+      + routing (known after apply)
+
+      + share_properties (known after apply)
+
+      + static_website (known after apply)
+    }
+
+  # module.grandnode.azurerm_storage_container.dpkeys will be created
+  + resource "azurerm_storage_container" "dpkeys" {
+      + container_access_type             = "private"
+      + default_encryption_scope          = (known after apply)
+      + encryption_scope_override_enabled = true
+      + has_immutability_policy           = (known after apply)
+      + has_legal_hold                    = (known after apply)
+      + id                                = (known after apply)
+      + metadata                          = (known after apply)
+      + name                              = "dpkeys"
+      + resource_manager_id               = (known after apply)
+      + storage_account_id                = (known after apply)
+      + url                               = (known after apply)
+    }
+
+  # module.grandnode.azurerm_storage_container.media will be created
+  + resource "azurerm_storage_container" "media" {
+      + container_access_type             = "blob"
+      + default_encryption_scope          = (known after apply)
+      + encryption_scope_override_enabled = true
+      + has_immutability_policy           = (known after apply)
+      + has_legal_hold                    = (known after apply)
+      + id                                = (known after apply)
+      + metadata                          = (known after apply)
+      + name                              = "media"
+      + resource_manager_id               = (known after apply)
+      + storage_account_id                = (known after apply)
+      + url                               = (known after apply)
+    }
+
+  # module.grandnode.random_string.backend_api_secret will be created
+  + resource "random_string" "backend_api_secret" {
+      + id          = (known after apply)
+      + length      = 48
+      + lower       = true
+      + min_lower   = 0
+      + min_numeric = 0
+      + min_special = 0
+      + min_upper   = 0
+      + number      = true
+      + numeric     = true
+      + result      = (known after apply)
+      + special     = false
+      + upper       = true
+    }
+
+  # module.grandnode.random_string.frontend_api_secret will be created
+  + resource "random_string" "frontend_api_secret" {
+      + id          = (known after apply)
+      + length      = 48
+      + lower       = true
+      + min_lower   = 0
+      + min_numeric = 0
+      + min_special = 0
+      + min_upper   = 0
+      + number      = true
+      + numeric     = true
+      + result      = (known after apply)
+      + special     = false
+      + upper       = true
+    }
+
+  # module.grandnode.random_string.mongo_password will be created
+  + resource "random_string" "mongo_password" {
+      + id          = (known after apply)
+      + length      = 32
+      + lower       = true
+      + min_lower   = 0
+      + min_numeric = 0
+      + min_special = 0
+      + min_upper   = 0
+      + number      = true
+      + numeric     = true
+      + result      = (known after apply)
+      + special     = false
+      + upper       = true
+    }
+
+  # module.grandnode.random_string.password_hash_key will be created
+  + resource "random_string" "password_hash_key" {
+      + id          = (known after apply)
+      + length      = 48
+      + lower       = true
+      + min_lower   = 0
+      + min_numeric = 0
+      + min_special = 0
+      + min_upper   = 0
+      + number      = true
+      + numeric     = true
+      + result      = (known after apply)
+      + special     = false
+      + upper       = true
+    }
+
+Plan: 20 to add, 1 to change, 0 to destroy.
+
+Changes to Outputs:
+  + application_url         = (known after apply)
+  + container_registry_name = "acrgrandnodeprod"
+  + install_url             = (known after apply)
+  + mongo_connection_string = (sensitive value)
+  + next_steps              = (known after apply)
+  + resource_group_name     = "rg-grandnode-prod"
+  + storage_account_name    = "stgrandnodeprod"
+
+─────────────────────────────────────────────────────────────────────────────
+
+Saved the plan to: tfplan.bin
+
+To perform exactly these actions, run the following command to apply:
+    terraform apply "tfplan.bin"
