@@ -34,13 +34,15 @@ the application in Docker, and deploying it to Azure.
   - [8.3 Deploying](#83-deploying)
   - [8.4 Scaling out](#84-scaling-out)
   - [8.5 Scheduled tasks with scale-to-zero](#85-scheduled-tasks-with-scale-to-zero)
-  - [8.6 Optional — split storefront / admin](#86-optional--split-storefront--admin)
-  - [8.7 Alternative — App Service](#87-alternative--app-service)
-  - [8.8 Custom domain and TLS](#88-custom-domain-and-tls)
-  - [8.9 Updating a deployment](#89-updating-a-deployment)
-  - [8.10 Troubleshooting](#810-troubleshooting)
-  - [8.11 Validating a deployment against the rules](#811-validating-a-deployment-against-the-rules)
-  - [8.12 What the Terraform module enforces](#812-what-the-terraform-module-enforces)
+  - [8.6 Running and operating scheduled tasks](#86-running-and-operating-scheduled-tasks)
+  - [8.7 Optional — split storefront / admin](#87-optional--split-storefront--admin)
+  - [8.8 Alternative — App Service](#88-alternative--app-service)
+  - [8.9 Custom domain and TLS](#89-custom-domain-and-tls)
+  - [8.10 Updating a deployment](#810-updating-a-deployment)
+  - [8.11 Troubleshooting](#811-troubleshooting)
+  - [8.12 Applying from a pipeline, and keeping the evidence](#812-applying-from-a-pipeline-and-keeping-the-evidence)
+  - [8.13 Validating a deployment against the rules](#813-validating-a-deployment-against-the-rules)
+  - [8.14 What the Terraform module enforces](#814-what-the-terraform-module-enforces)
 - [9. Verification](#9-verification)
 - [10. Known constraints](#10-known-constraints)
 ---
@@ -390,7 +392,7 @@ without a shared mount, files uploaded through admin are invisible to the storef
 ## 8. Deploying to Azure
 
 A complete walkthrough, from an empty subscription to a running store. Azure Container Apps is
-the recommended target; [section 8.7](#87-alternative--app-service) covers App Service.
+the recommended target; [section 8.8](#88-alternative--app-service) covers App Service.
 
 > **Two paths to the same result.** This section is the imperative `az` CLI walkthrough — useful
 > for understanding exactly what gets created, and for a one-off environment. For anything
@@ -413,7 +415,7 @@ the recommended target; [section 8.7](#87-alternative--app-service) covers App S
 > ```
 >
 > The explanations below apply to both paths. The module encodes several of them as `check` blocks
-> that fail at plan time rather than at apply — see [section 8.12](#812-what-the-terraform-module-enforces).
+> that fail at plan time rather than at apply — see [section 8.14](#814-what-the-terraform-module-enforces).
 
 ### 8.1 Prerequisites
 
@@ -459,7 +461,7 @@ Registration takes a few minutes. Check with
 |---|---|---|
 | Region | see note | Put the app, database and storage in the **same** region — cross-region database latency dominates every request. **Not `westeurope`** — see below. |
 | MongoDB | Atlas, Cosmos DB for MongoDB **vCore**, or self-hosted | Atlas or vCore. The RU-based Cosmos Mongo API is a compatibility layer on a different engine, not a real MongoDB server. |
-| Topology | single container, or split storefront/admin | Start single. Split only for ingress isolation — see [section 8.6](#86-optional--split-storefront--admin). |
+| Topology | single container, or split storefront/admin | Start single. Split only for ingress isolation — see [section 8.7](#87-optional--split-storefront--admin). |
 | Scale | 1 replica, or many | Start at 1. Multi-replica requires Redis and blob storage first — see [section 8.4](#84-scaling-out). |
 | Custom domain | yes/no | Optional, can be added later. |
 
@@ -505,8 +507,8 @@ Terraform in [`infra/`](infra/README.md) provisions all of this. The table is th
 | Blob container `dpkeys` | data-protection key ring | **Must exist before the app starts.** Without it the key ring falls back to the container filesystem and every restart signs out every user. |
 | Log Analytics + Application Insights | telemetry | Setting `ApplicationInsights__ConnectionString` activates the OpenTelemetry exporter `AddServiceDefaults()` already wires in. Do it on the first deployment, not after a performance problem. |
 | Container Apps environment | hosts the app and jobs | — |
-| Container app | the application | Port 8080, `/health/live` probes — see [8.12](#812-what-the-terraform-module-enforces). |
-| Container Apps Jobs | scheduled tasks | Only when `min_replicas = 0` — see [8.5](#85-scheduled-tasks-with-scale-to-zero). |
+| Container app | the application | Port 8080, `/health/live` probes — see [section 8.14](#814-what-the-terraform-module-enforces). |
+| Container Apps Jobs | scheduled tasks | Only when `min_replicas = 0` — see [section 8.5](#85-scheduled-tasks-with-scale-to-zero). |
 | Azure Cache for Redis | cross-replica cache invalidation | Optional, **required** above one replica. |
 | Azure Files shares | `App_Data`, media uploads | Optional; must be seeded before mounting. |
 
@@ -689,7 +691,102 @@ to arbitrate.
 
 ---
 
-### 8.6 Optional — split storefront / admin
+### 8.6 Running and operating scheduled tasks
+
+#### Every task has at least two switches
+
+A task running is not enough for it to *do* anything. `ScheduleTask.Enabled` controls whether it
+executes at all; several tasks then gate again on their own setting:
+
+| Task | Second gate |
+|---|---|
+| `Update currency exchange rates` | `CurrencySettings.AutoUpdateEnabled` — seeded **false**. `Execute()` returns immediately when it is off. |
+| `Send emails` | nothing to send unless the `QueuedEmail` collection has rows, **and** a real SMTP account is configured. The installer seeds `smtp.mail.com` with username `123` — a deliberate non-working stub. |
+| `Apply carrier shipment events` | the `Shipping.CarrierTracking` plugin must be installed and a signing secret configured. |
+
+A job that exits `Succeeded` having done nothing is therefore normal and expected. Check the logs,
+not the exit status, to confirm work actually happened.
+
+#### Enabling and disabling — admin UI
+
+```
+Admin → System → Schedule tasks          /admin/ScheduleTask/List
+```
+
+`System` is a top-level menu item; `Schedule tasks` is its fifth child, after `System information`,
+`Queued emails`, `Contact Us form` and `Maintenance`. Requires the `ScheduleTasks` permission.
+
+The edit screen exposes `Enabled`, `TimeInterval`, `StopOnError` and `StoreId`.
+
+Two things about that screen in a jobs deployment:
+
+- **`Enabled` governs both execution paths.** `ScheduleTaskRunner` reads the same row, so switching
+  a task off here stops the Container Apps job as well as the in-process loop.
+- **`TimeInterval` does not.** For tasks running as jobs the cadence is the cron in
+  `scheduled_task_jobs`; changing the interval here affects only the in-process loop. To change a
+  job's schedule, edit `infra/environments/prod/main.tf` and re-apply.
+
+All tasks are seeded **disabled**, so a fresh installation runs no background work until an
+administrator turns something on. Note this includes `Send emails`: until it is enabled, order
+confirmations and password resets accumulate unsent in `Admin → System → Queued emails`.
+
+#### Running one on demand
+
+```bash
+# list the jobs and their schedules
+az containerapp job list -g rg-grandnode-prod \
+  --query "[].{name:name,cron:properties.configuration.scheduleTriggerConfig.cronExpression}" -o table
+
+# trigger one now
+az containerapp job start -g rg-grandnode-prod -n caj-update-currency-exch-prod
+```
+
+The command returns an execution name such as `caj-update-currency-exch-prod-utkokb1`.
+
+#### Checking the result
+
+```bash
+az containerapp job execution list -g rg-grandnode-prod -n caj-update-currency-exch-prod \
+  --query "[].{name:name,status:properties.status,start:properties.startTime,end:properties.endTime}" -o table
+```
+
+`Succeeded` means the process exited 0. To see what it actually did, query the logs — the runner
+logs one line on entry and one on completion:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where TimeGenerated > ago(30m)
+| where Log_s contains "ScheduleTaskRunner" or Log_s contains "Running task"
+| project TimeGenerated, Log_s
+| order by TimeGenerated asc
+```
+
+Expect a pair:
+
+```
+info: ScheduleTaskRunner[0]
+      Running task 'Update currency exchange rates'
+info: ScheduleTaskRunner[0]
+      Task 'Update currency exchange rates' completed
+```
+
+`Task '<name>' is disabled - skipping` means the `Enabled` flag is off. That still exits 0 — a
+disabled task is an operator's decision, not a failure, and a scheduler must not alert on it.
+
+#### Running one locally
+
+The same entry point works outside Azure, which is the quickest way to debug a task:
+
+```bash
+dotnet Grand.Web.dll --run-task "Send emails"
+```
+
+It builds the host, resolves the task, executes it, and exits without starting Kestrel. Exit `0`
+succeeded or skipped, `1` failed.
+
+---
+
+### 8.7 Optional — split storefront / admin
 
 Only worth doing for ingress isolation: Container Apps ingress restrictions apply to a whole app,
 so a single container cannot restrict `/admin` alone without Front Door or Application Gateway in
@@ -729,7 +826,7 @@ standalone admin container.
 
 ---
 
-### 8.7 Alternative — App Service
+### 8.8 Alternative — App Service
 
 **Containers:** deploy the same image to Linux App Service and add `WEBSITES_PORT=8080`. Set the
 health check path to `/health/ready`. All the environment variables above apply unchanged.
@@ -743,7 +840,7 @@ storage. The blob settings remain correct for scale-out.
 
 ---
 
-### 8.8 Custom domain and TLS
+### 8.9 Custom domain and TLS
 
 ```bash
 az containerapp hostname add -n $APPNAME -g $RG --hostname shop.example.com
@@ -757,7 +854,7 @@ Configuration → Stores so generated links and emails use the right host.
 
 ---
 
-### 8.9 Updating a deployment
+### 8.10 Updating a deployment
 
 ```bash
 az acr build -r $ACR -t grandnode:2 -f Dockerfile .
@@ -778,7 +875,7 @@ exactly one app, and prefer single-revision mode for upgrades that carry migrati
 
 ---
 
-### 8.10 Troubleshooting
+### 8.11 Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
@@ -792,7 +889,7 @@ exactly one app, and prefer single-revision mode for upgrades that carry migrati
 | Install fails with `Command create failed: Collation is currently not supported.` | Cosmos vCore rejects collation. Re-run the installer with Collation = `-None-`. |
 | Every request times out after the installer ran (success **or** failure) | The readiness check is pinned unhealthy by `ResetCache()`. Restart the revision — see [section 8.3](#83-deploying). |
 | First request after an idle period is very slow | `min_replicas = 0`. Expected; set to 1 to avoid it. |
-| Queued email never sends, unpaid orders never expire, outbox never drains | `min_replicas = 0` with no `scheduled_task_jobs` — background work is hosted in the web process. See [8.5](#85-scheduled-tasks-with-scale-to-zero). |
+| Queued email never sends, unpaid orders never expire, outbox never drains | `min_replicas = 0` with no `scheduled_task_jobs` — background work is hosted in the web process. See [section 8.5](#85-scheduled-tasks-with-scale-to-zero). |
 | A scheduled-task job runs and does nothing | Its key does not match `ScheduleTaskName` in the database, or the task row is disabled in the admin panel. |
 | App will not start after enabling volumes | The Azure Files share was mounted before being seeded, hiding `App_Data/appsettings.json`. |
 | Admin theme picker is empty | Expected in a split admin container — see [section 10](#10-known-constraints). |
@@ -807,7 +904,86 @@ curl -i https://<fqdn>/health/ready
 
 ---
 
-### 8.11 Validating a deployment against the rules
+### 8.12 Applying from a pipeline, and keeping the evidence
+
+`terraform apply` writes a human-readable stream to the console. **Do not parse it, and do not keep
+it as the record of what happened** — the format is not a stable interface and changes between
+versions. Terraform has machine-readable paths for every verification purpose.
+
+#### Plan to a file, and apply that file
+
+The most important habit here is not about logging at all:
+
+```bash
+terraform plan -out=tfplan.bin
+terraform apply tfplan.bin
+```
+
+Applying a saved plan closes the gap between what was reviewed and what runs — without it, state or
+drift can change between the two commands and `apply` takes decisions nobody saw.
+
+#### The full sequence deploying and saving structured data
+
+```bash
+cd infra/environments/prod
+
+# 1. plan to a binary artifact, and keep a human-readable copy for the PR
+terraform plan -out=tfplan.bin -input=false -no-color | tee plan.txt
+
+# 2. the same plan as structured data
+terraform show -json tfplan.bin > plan.json
+
+# 3. policy gate: refuse a plan that destroys anything
+jq -e '[.resource_changes[] | select(.change.actions[]=="delete")] | length == 0' plan.json
+
+# 4. apply exactly what was planned, with machine-readable events
+terraform apply -json -input=false tfplan.bin | tee apply.jsonl
+
+# 5. what resulted
+terraform output -json > outputs.json
+
+# 6. validate the running deployment against the rules
+../../scripts/check-deployment.sh -g rg-grandnode-prod -n ca-grandnode-prod
+```
+
+Step 3 is the point of the JSON: a gate on `plan.json` is a query, whereas grepping console output
+for "0 destroyed" is guesswork against an unstable format.
+
+#### Artifacts, and what each answers
+
+| File | Answers | Keep? |
+|---|---|---|
+| `plan.json` | what was *intended* | yes — **sensitive** |
+| `apply.jsonl` | what *happened*, event by event | yes — **sensitive** |
+| `outputs.json` | what *resulted* | yes — **sensitive** |
+| `plan.txt` | readable diff for a reviewer | yes, for the PR |
+| `tfplan.bin` | the applied artifact | until applied — **sensitive** |
+
+#### Treat plan files as secrets
+
+A plan records the values it is about to set. In this module **16 of 21 resources carry sensitive
+values**, including the Mongo connection string, the storage account key and the API signing keys.
+A `.tfplan` and its JSON are as sensitive as the state file.
+
+Never commit them, and never attach them to an unrestricted CI artifact. Encrypt, restrict and
+expire them.
+
+One thing that is *not* exposed: values generated during the apply. `random_string.mongo_password`
+appears in the plan with only `length` and `special` — its `result` is unknown until apply, so the
+generated passwords are not in `plan.json`.
+
+#### After the fact, query state — not logs
+
+Logs record what a run believed at the time. For what exists now:
+
+```bash
+terraform show -json > state.json      # every resource and attribute
+terraform output -json                 # just the outputs
+```
+
+---
+
+### 8.13 Validating a deployment against the rules
 
 The `check` blocks in the next section only protect deployments made through Terraform. A
 deployment made with the `az` CLI, from the portal, or by editing an existing app has no such
@@ -842,7 +1018,7 @@ Requires `az` (signed in) and `jq`.
 
 ---
 
-### 8.12 What the Terraform module enforces
+### 8.14 What the Terraform module enforces
 
 Four `check` blocks encode the failures this deployment actually hit, so they surface at plan time
 instead of in production:
@@ -850,7 +1026,7 @@ instead of in production:
 | Check | Fails when | Why it exists |
 |---|---|---|
 | `installer_needs_a_warm_replica` | `enable_installer = true` with `min_replicas = 0` | The `/install` POST seeds the database inside a single HTTP request; at scale-to-zero it cold-starts first and the browser times out before the app sees it. |
-| `background_work_has_a_home` | `min_replicas = 0` and no `scheduled_task_jobs` | Scheduled tasks live in the web process — see [8.5](#85-scheduled-tasks-with-scale-to-zero). |
+| `background_work_has_a_home` | `min_replicas = 0` and no `scheduled_task_jobs` | Scheduled tasks live in the web process — see [section 8.5](#85-scheduled-tasks-with-scale-to-zero). |
 | `redis_required_for_scale_out` | `max_replicas > 1` with `enable_redis = false` | The cache is per-instance; replicas would serve stale prices and stock. Correctness, not performance. |
 | `volumes_must_be_seeded_first` | `enable_persistent_volumes = true` with `volumes_seeded = false` | An Azure Files mount replaces the directory the image ships. `/app/App_Data` carries `appsettings.json`, without which the host will not start. |
 

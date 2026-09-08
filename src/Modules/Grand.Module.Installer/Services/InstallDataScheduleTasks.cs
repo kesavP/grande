@@ -4,6 +4,21 @@ namespace Grand.Module.Installer.Services;
 
 public partial class InstallationService
 {
+    /// <summary>
+    ///     Seeds the scheduled tasks, all disabled.
+    ///
+    ///     Every task is opt-in: an administrator enables the ones a given store needs from
+    ///     System -> Scheduled tasks. Nothing runs on a fresh installation until someone decides
+    ///     it should, which keeps a new store from silently deleting guest records, calling an
+    ///     external exchange-rate service or emailing customers before it is configured.
+    ///
+    ///     The Enabled flag is authoritative for both execution paths - the in-process
+    ///     BackgroundServiceTask loop and ScheduleTaskRunner (--run-task), which reads the same
+    ///     row - so the admin switch turns a task off everywhere, including scheduled jobs.
+    ///
+    ///     Note "Send emails" is disabled here too. Until it is enabled, order confirmations and
+    ///     password resets accumulate in the QueuedEmail collection unsent.
+    /// </summary>
     protected virtual Task InstallScheduleTasks()
     {
         //these tasks are default - they are created in order to insert them into database
@@ -12,13 +27,13 @@ public partial class InstallationService
         var tasks = new List<ScheduleTask> {
             new() {
                 ScheduleTaskName = "Send emails",
-                Enabled = true,
+                Enabled = false,
                 StopOnError = false,
                 TimeInterval = 1
             },
             new() {
                 ScheduleTaskName = "Delete guests",
-                Enabled = true,
+                Enabled = false,
                 StopOnError = false,
                 TimeInterval = 1440
             },
@@ -30,7 +45,7 @@ public partial class InstallationService
             },
             new() {
                 ScheduleTaskName = "Update currency exchange rates",
-                Enabled = true,
+                Enabled = false,
                 StopOnError = false,
                 TimeInterval = 1440
             },

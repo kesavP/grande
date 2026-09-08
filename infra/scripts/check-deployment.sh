@@ -56,7 +56,11 @@ MAX=$(jq -r '.properties.template.scale.maxReplicas // 1' <<<"$APP_JSON")
 INSTALLER=$(env_value "FeatureManagement__Grand.Module.Installer")
 REDIS=$(env_value "Redis__RedisPubSubEnabled")
 FORCE_HTTPS=$(env_value "Security__ForceUseHTTPS")
-READINESS=$(jq -r '.properties.template.containers[0].readinessProbes[0].httpGet.path // "none"' <<<"$APP_JSON")
+# Probes come back as one array discriminated by .type - NOT as separate
+# readinessProbes[]/livenessProbes[] arrays. Reading the wrong path returns null,
+# which made this rule report "none" and silently pass whatever was configured.
+READINESS=$(jq -r '[.properties.template.containers[0].probes[]? | select(.type=="Readiness")][0].httpGet.path // "none"' <<<"$APP_JSON")
+LIVENESS=$(jq -r '[.properties.template.containers[0].probes[]? | select(.type=="Liveness")][0].httpGet.path // "none"' <<<"$APP_JSON")
 MOUNTS=$(jq -r '[.properties.template.containers[0].volumeMounts[]?] | length' <<<"$APP_JSON")
 
 ENV_ID=$(jq -r '.properties.environmentId // .properties.managedEnvironmentId // ""' <<<"$APP_JSON")
@@ -72,9 +76,20 @@ fi
 # on missing evidence.
 case "$JOBS" in ''|*[!0-9]*) JOBS=0 ;; esac
 
+PROVISIONING=$(jq -r '.properties.provisioningState // "Unknown"' <<<"$APP_JSON")
+
 echo "GrandNode deployment check: $APP (rg: $RG)"
 echo "  minReplicas=$MIN maxReplicas=$MAX jobs=$JOBS installer=${INSTALLER:-unset} redis=${REDIS:-unset}"
 echo
+
+# --- the app has to have started before any other rule means anything --------
+
+if [ "$PROVISIONING" != "Succeeded" ]; then
+    fail "container_app_provisioned" \
+         "provisioningState is '$PROVISIONING', not 'Succeeded'. Every rule below is reported against an app that never started - check the image tag exists in the registry and read: az containerapp logs show -g $RG -n $APP"
+else
+    pass "container_app_provisioned"
+fi
 
 # --- the same four rules the Terraform module enforces -----------------------
 
@@ -122,8 +137,11 @@ fi
 if [ "$READINESS" = "/health/ready" ]; then
     fail "readiness_probe_not_latching" \
          "The readiness probe points at /health/ready, whose StartupHealthCheck is latched false by InstallController's ResetCache() on both success and failure. Running the installer removes the replica from rotation permanently. Use /health/live."
+elif [ "$READINESS" = "none" ]; then
+    warn "readiness_probe_not_latching" \
+         "No readiness probe configured. Not dangerous, but traffic is routed before the app reports itself able to serve - a slow cold start will return errors rather than queue."
 else
-    pass "readiness_probe_not_latching (${READINESS})"
+    pass "readiness_probe_not_latching (readiness=${READINESS}, liveness=${LIVENESS})"
 fi
 
 echo

@@ -21,6 +21,10 @@ module "grandnode" {
   # Steady state. To (re)install, flip to enable_installer = true with
   # min_replicas = 1 / cpu = 1.0 / memory = "2Gi" - the /install POST seeds the
   # database inside one HTTP request and times out on a cold start.
+  # STEADY STATE. Scale-to-zero is only safe because scheduled_task_jobs below run the
+  # background work as jobs - the in-process loops stop entirely at zero replicas.
+  # To re-install against a fresh database, switch to:
+  #   enable_installer = true, min_replicas = 1, cpu = 1.0, memory = "2Gi"
   enable_installer = false
   min_replicas     = 0
   max_replicas     = 1

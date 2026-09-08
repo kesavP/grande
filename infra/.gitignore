@@ -7,5 +7,7 @@ crash.log
 !*.tfvars.example
 override.tf
 override.tf.json
+plan.json
+tfplan.bin
 
 # .terraform.lock.hcl is intentionally NOT ignored - commit it to pin providers.
