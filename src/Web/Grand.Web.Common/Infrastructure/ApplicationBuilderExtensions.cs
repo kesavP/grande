@@ -214,6 +214,8 @@ public static class ApplicationBuilderExtensions
     /// <param name="application">Builder for configuring an application's request pipeline</param>
     public static void UseDefaultSecurityHeaders(this WebApplication application)
     {
+        var securityConfig = application.Services.GetRequiredService<SecurityConfig>();
+
         var policyCollection = new HeaderPolicyCollection()
             .AddXssProtectionBlock()
             .AddFrameOptionsDeny()
@@ -231,7 +233,24 @@ public static class ApplicationBuilderExtensions
                 builder.AddMediaSrc().From("*");
                 builder.AddImgSrc().From("*").Data();
                 builder.AddObjectSrc().From("*");
-                builder.AddScriptSrc().From("*").UnsafeInline().UnsafeEval();
+                //script-src is the one directive worth narrowing: it decides what may execute.
+                //"*" would allow a script from any host, so an injected tag pointing at an
+                //attacker's domain would run. Restricting it to self plus the configured
+                //origins means such a tag is refused by the browser.
+                //
+                //UnsafeInline and UnsafeEval are NOT removable here, and saying why matters
+                //more than pretending otherwise:
+                //  - 64 storefront views render inline <script> blocks;
+                //  - Vue ships the runtime template compiler (vite.config.js aliases vue to
+                //    vue.esm-bundler.js) because the templates ARE the Razor markup, parsed
+                //    from the DOM and compiled with new Function() at runtime.
+                //Dropping either renders the storefront blank. Keeping them while narrowing
+                //the host list is a real improvement over "*", not a complete CSP.
+                var scriptSrc = builder.AddScriptSrc().Self();
+                foreach (var host in securityConfig.ScriptSrcAllowedHosts ?? [])
+                    if (!string.IsNullOrWhiteSpace(host))
+                        scriptSrc.From(host.Trim());
+                scriptSrc.UnsafeInline().UnsafeEval();
                 builder.AddStyleSrc().From("*").UnsafeEval().UnsafeInline();
             })
             .AddPermissionsPolicy(builder =>

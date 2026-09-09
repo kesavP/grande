@@ -12,7 +12,7 @@ module "grandnode" {
   # Tag 2 carries the installer fix (CreateTables no longer skips index
   # creation when collation is empty). Tag 1 installs an unindexed database.
   image_repository = "grandnode"
-  image_tag        = "2"
+  image_tag        = "3"
 
   mongo_compute_tier      = "Free"
   mongo_storage_gb        = 32
@@ -65,6 +65,23 @@ module "grandnode" {
   # App_Data and wwwroot/assets/images, then set both true.
   enable_persistent_volumes = false
   volumes_seeded            = false
+
+  # Serve the storefront bundles from the storage account instead of from inside the
+  # image, so a frontend release is an upload plus a settings change. Inert until
+  # Base URL and Manifest are set in Admin -> Settings -> Frontend asset settings.
+  #
+  # CORS is mandatory, not cosmetic: integrity/crossorigin="anonymous" makes the
+  # browser fetch each bundle as a CORS request, and a response without a matching
+  # Access-Control-Allow-Origin is discarded silently.
+  enable_bundle_storage = true
+  bundle_cors_origins = [
+    "https://ca-grandnode-prod.politesmoke-990f0edb.southindia.azurecontainerapps.io"
+  ]
+
+  # Object ID, not the sign-in name. jagermister26_outlook.com (guest in this tenant).
+  # Grants Storage Blob Data Contributor so releases can be published with
+  # --auth-mode login instead of the account key.
+  bundle_publisher_object_ids = ["b8ec1442-7892-4e52-a29e-1b3c384d6d4c"]
 
   installed_plugins = ""
 

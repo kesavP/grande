@@ -255,6 +255,82 @@ variable "scheduled_task_jobs" {
   default = {}
 }
 
+variable "enable_bundle_storage" {
+  description = <<-EOT
+    Create a public-read "bundles" container for serving the storefront's JavaScript
+    and CSS from storage instead of from inside the image, so a frontend release does
+    not require an application rebuild.
+
+    Inert on its own: the application keeps serving /bundles from the image until
+    FrontendAssetSettings.BaseUrl and Manifest are configured in the admin panel.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "bundle_cors_origins" {
+  description = <<-EOT
+    Origins allowed to fetch the bundles, e.g.
+    ["https://ca-grandnode-prod.<suffix>.azurecontainerapps.io"].
+
+    Required whenever bundles are served from storage. Subresource Integrity forces
+    crossorigin="anonymous", which makes the fetch a CORS request - without a matching
+    Access-Control-Allow-Origin the browser silently discards the script.
+
+    Empty adds no CORS rule at all.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
+variable "bundle_publisher_object_ids" {
+  description = <<-EOT
+    Entra object IDs (GUIDs, not sign-in names) granted "Storage Blob Data Contributor"
+    on the storage account, so they can upload frontend bundle releases with
+    `az storage blob upload-batch --auth-mode login`.
+
+    Without this, publishing needs the account key, which grants full data-plane access
+    to every container - media and the lakehouse included - and is one shared secret
+    rather than a per-identity, auditable grant.
+
+    Find your own with: az ad signed-in-user show --query id -o tsv
+    For a CI service principal: az ad sp show --id <app-id> --query id -o tsv
+
+    Applying this requires the caller to hold Owner or User Access Administrator;
+    Contributor alone cannot create role assignments.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
+variable "enable_default_security_headers" {
+  description = <<-EOT
+    Send the default security headers, including a Content-Security-Policy whose
+    script-src is restricted to "self" plus script_src_allowed_hosts.
+
+    Off by default because a CSP that is too tight breaks a storefront silently in the
+    browser rather than loudly in the logs. Turn it on, then load the storefront and
+    check the browser console for blocked resources before considering it done.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "script_src_allowed_hosts" {
+  description = <<-EOT
+    Extra origins allowed to serve JavaScript, beyond "self". Scheme and host only -
+    no path, no trailing slash.
+
+    The bundle storage account is added automatically when enable_bundle_storage is
+    true, so this is for the rest: analytics, payment provider SDKs, chat widgets.
+    Anything a plugin injects a <script src> for belongs here, or the browser refuses it.
+
+    Only consulted when enable_default_security_headers is true.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "enable_lakehouse" {
   description = <<-EOT
     Create bronze/silver/gold containers on the storage account and let the

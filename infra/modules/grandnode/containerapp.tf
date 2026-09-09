@@ -58,6 +58,27 @@ locals {
     Extensions__InstalledPlugins = var.installed_plugins
   } : {}
 
+  # Content-Security-Policy script-src allowlist. Indexed keys are how ASP.NET Core
+  # binds a string[] from environment variables (Security__ScriptSrcAllowedHosts__0).
+  #
+  # Emitting nothing when the list is empty matters: an empty allowlist with the
+  # headers turned on would leave script-src at 'self' only, and the storefront's
+  # bundles - served from the storage account - would stop loading.
+  csp_env = var.enable_default_security_headers ? merge(
+    { Security__UseDefaultSecurityHeaders = "true" },
+    {
+      for i, host in local.script_src_allowed_hosts :
+      "Security__ScriptSrcAllowedHosts__${i}" => host
+    }
+  ) : {}
+
+  # The bundle origin is added automatically when bundles are served from storage -
+  # forgetting it is the obvious way to take the storefront down with this setting.
+  script_src_allowed_hosts = distinct(concat(
+    var.enable_bundle_storage ? [trimsuffix(local.blob_endpoint, "/")] : [],
+    var.script_src_allowed_hosts
+  ))
+
   redis_env = var.enable_redis ? {
     Redis__RedisPubSubEnabled = "true"
     Redis__RedisPubSubChannel = "grandnode-cache"
@@ -168,7 +189,7 @@ resource "azurerm_container_app" "this" {
       memory = var.memory
 
       dynamic "env" {
-        for_each = merge(local.plain_env, local.redis_env, local.plugins_env)
+        for_each = merge(local.plain_env, local.redis_env, local.plugins_env, local.csp_env)
         content {
           name  = env.key
           value = env.value
@@ -280,5 +301,16 @@ check "background_work_has_a_home" {
   assert {
     condition     = var.min_replicas >= 1 || length(var.scheduled_task_jobs) > 0
     error_message = "min_replicas = 0 stops all scheduled tasks: they are hosted in the web process. Set min_replicas = 1, or define scheduled_task_jobs to run them as Container Apps Jobs."
+  }
+}
+
+# Bundles served from storage are fetched with crossorigin="anonymous" because of the
+# integrity attribute, so the storage account must allow the storefront's origin. Without
+# it the browser discards every bundle and the page renders with no JavaScript - and
+# nothing in the application logs says so.
+check "bundle_storage_needs_cors" {
+  assert {
+    condition     = !var.enable_bundle_storage || length(var.bundle_cors_origins) > 0
+    error_message = "enable_bundle_storage = true requires bundle_cors_origins. Subresource Integrity forces a CORS fetch; without an allowed origin the browser silently discards the bundles."
   }
 }

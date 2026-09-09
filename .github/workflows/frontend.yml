@@ -47,8 +47,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # npm run build = vite build + build-theme-css.mjs. Running only `vite build`
-      # would leave the theme CSS stale.
+      # npm run build = vite build + build-theme-css.mjs + build-asset-manifest.mjs.
+      # Running only `vite build` would leave the theme CSS and the integrity
+      # hashes in asset-manifest.json stale.
       - name: Build bundles
         run: npm run build
 

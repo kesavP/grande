@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "assets": {
+    "app.runtime.bundle.js": {
+      "file": "app.runtime.bundle.js",
+      "integrity": "sha384-zxiqcuS4jHHPcwvSprFpxb/BWJw0+CryiDS7TtFU5ao5F1YQMUqE7+pA7jxEOxZ0"
+    },
+    "libs.css": {
+      "file": "libs.css",
+      "integrity": "sha384-DErr4KubPAjcrHIL2Kg7Co6+sOz5kw7qupPxRfQcrTH/+6+ElV3XDjBSibE4rRmY"
+    },
+    "style.min.css": {
+      "file": "style.min.css",
+      "integrity": "sha384-g3S154Y3qYnF4UAnZUqGRkAtZEppGTmunbp7P9ZMYpDHKW77tqTkYyDY29cvfLAP"
+    },
+    "style.rtl.min.css": {
+      "file": "style.rtl.min.css",
+      "integrity": "sha384-v26KMidDjeZuJLBYKqsHDynQ53o+AcMq7N9ibjBSNSWQ/68gaDbNrcT9xwsnv327"
+    }
+  }
+}

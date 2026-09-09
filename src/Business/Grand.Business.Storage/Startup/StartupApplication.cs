@@ -19,6 +19,9 @@ public class StartupApplication : IStartupApplication
         //data lake (bronze) writer - inert unless Azure:LakeBronzeContainerName is set
         services.AddScoped<IEventLakeWriter, AzureEventLakeWriter>();
 
+        //singleton: the manifest changes only when a frontend release is published
+        services.AddSingleton<IFrontendAssetResolver, FrontendAssetResolver>();
+
         //picture service
         var azureConfig = new AzureConfig();
         configuration.GetSection("Azure").Bind(azureConfig);

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Grand.Business.Core.Interfaces.Storage;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
@@ -18,13 +19,15 @@ public class ScriptTagHelper : TagHelper
     private readonly IHttpContextAccessor _httpContextAccessor;
 
     private readonly IResourceManager _resourceManager;
+    private readonly IFrontendAssetResolver _assetResolver;
 
     public ScriptTagHelper(IResourceManager resourceManager, IHttpContextAccessor httpContextAccessor,
-        IFileVersionProvider fileVersionProvider)
+        IFileVersionProvider fileVersionProvider, IFrontendAssetResolver assetResolver)
     {
         _resourceManager = resourceManager;
         _httpContextAccessor = httpContextAccessor;
         _fileVersionProvider = fileVersionProvider;
+        _assetResolver = assetResolver;
     }
 
     [HtmlAttributeName(LocationAttributeName)]
@@ -63,9 +66,29 @@ public class ScriptTagHelper : TagHelper
             if (!string.IsNullOrEmpty(Src))
             {
                 var src = Src;
-                if (AppendVersion == true && _httpContextAccessor.HttpContext != null)
+
+                //A bundle published to a CDN is addressed by its manifest entry, which also
+                //carries the integrity hash. Resolve returns null for anything not in the
+                //manifest, so every other script keeps the path written in the view.
+                var asset = ResolveAsset(Src);
+                if (asset != null)
+                {
+                    src = asset.Url;
+                    if (!string.IsNullOrEmpty(asset.Integrity))
+                    {
+                        builder.Attributes["integrity"] = asset.Integrity;
+                        //required for SRI on a cross-origin script; harmless same-origin
+                        builder.Attributes["crossorigin"] = "anonymous";
+                    }
+                }
+                //asp-append-version is redundant once a manifest is in play - the URL already
+                //changes with the release - and it would hash a file no longer served locally
+                else if (AppendVersion == true && _httpContextAccessor.HttpContext != null)
+                {
                     src = _fileVersionProvider.AddFileVersionToPath(
                         _httpContextAccessor.HttpContext.Request.PathBase, src);
+                }
+
                 builder.Attributes.Add("src", src);
             }
             foreach (var attribute in output.Attributes)
@@ -86,5 +109,19 @@ public class ScriptTagHelper : TagHelper
                     break;
             }
         }
+    }
+
+    /// <summary>
+    ///     Looks up "/bundles/x.js" by file name. Null when the path is not a managed bundle or
+    ///     no manifest is configured - which is what keeps the default in-image deployment
+    ///     working unchanged.
+    /// </summary>
+    private FrontendAsset ResolveAsset(string src)
+    {
+        const string prefix = "/bundles/";
+        if (string.IsNullOrEmpty(src) || !src.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return _assetResolver.Resolve(src[prefix.Length..]);
     }
 }

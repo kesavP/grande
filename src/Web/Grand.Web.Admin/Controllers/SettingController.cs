@@ -59,6 +59,90 @@ public class SettingController(
         await cacheBase.Clear();
     }
 
+    /// <summary>
+    ///     Where the storefront's JavaScript and CSS bundles are served from.
+    ///
+    ///     Empty BaseUrl serves the bundles shipped inside the image, which is the default and
+    ///     needs no configuration. Setting it moves them to a CDN so a frontend release becomes an
+    ///     upload plus a save here, rather than an application rebuild.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately NOT store-scoped, unlike every other screen on this controller.
+    ///
+    ///     IFrontendAssetResolver is a singleton built on first use, and it takes
+    ///     FrontendAssetSettings through the constructor. The registration in AddSettings reads
+    ///     the store id from IContextAccessor, which is an AsyncLocal - so the scope the resolver
+    ///     captures is whichever store happened to serve the first request after a restart, and
+    ///     none at all if something resolves it outside a request. Neither is a scope an
+    ///     administrator can aim at.
+    ///
+    ///     Writing to the global scope is what makes it reachable either way:
+    ///     SettingService.LoadSetting falls back to the row with an empty StoreId when a store has
+    ///     no override of its own.
+    /// </remarks>
+    public async Task<IActionResult> FrontendAsset([FromServices] IFrontendAssetResolver assetResolver)
+    {
+        var settings = await settingService.LoadSetting<FrontendAssetSettings>();
+
+        var model = new FrontendAssetSettingsModel {
+            BaseUrl = settings.BaseUrl,
+            Manifest = settings.Manifest,
+            UseSubresourceIntegrity = settings.UseSubresourceIntegrity,
+            ResolvedAssets = ResolveForDisplay(assetResolver)
+        };
+
+        return View(model);
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> FrontendAsset(FrontendAssetSettingsModel model,
+        [FromServices] IFrontendAssetResolver assetResolver)
+    {
+        if (!ModelState.IsValid)
+            return await FrontendAsset(assetResolver);
+
+        //global scope only - see the remarks on the GET action
+        var settings = await settingService.LoadSetting<FrontendAssetSettings>();
+
+        settings.BaseUrl = model.BaseUrl?.Trim();
+        settings.Manifest = model.Manifest?.Trim();
+        settings.UseSubresourceIntegrity = model.UseSubresourceIntegrity;
+
+        await settingService.SaveSetting(settings);
+        await settingService.ClearCache();
+
+        Success(translationService.GetResource("Admin.Configuration.Updated"));
+
+        //IFrontendAssetResolver is a singleton holding the parsed manifest, so it keeps serving
+        //the previous release until the process restarts. Saying so here is better than an
+        //administrator concluding the save did not work.
+        //
+        //persistNextRequest must stay at its default: this action redirects, and a
+        //non-persisted notification goes to ViewData, which does not survive the 302.
+        Warning(translationService.GetResource("Admin.Settings.FrontendAsset.RestartRequired"));
+
+        return RedirectToAction("FrontendAsset");
+    }
+
+    private static IList<FrontendAssetSettingsModel.ResolvedAssetModel> ResolveForDisplay(
+        IFrontendAssetResolver assetResolver)
+    {
+        string[] names =
+        [
+            "app.runtime.bundle.js", "libs.css", "style.min.css", "style.rtl.min.css"
+        ];
+
+        return names
+            .Select(name => new { name, asset = assetResolver.Resolve(name) })
+            .Where(x => x.asset != null)
+            .Select(x => new FrontendAssetSettingsModel.ResolvedAssetModel {
+                Name = x.name,
+                Url = x.asset.Url,
+                Integrity = x.asset.Integrity
+            })
+            .ToList();
+    }
+
     public async Task<IActionResult> Content()
     {
         //load settings for a chosen store scope

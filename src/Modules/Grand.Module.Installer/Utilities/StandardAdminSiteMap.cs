@@ -992,6 +992,15 @@ public static class StandardAdminSiteMap
                     IconClass = "fa fa-dot-circle-o"
                 },
                 new() {
+                    SystemName = "Frontend asset settings",
+                    ResourceName = "Admin.Settings.FrontendAsset",
+                    PermissionNames = new List<string> { PermissionSystemName.Settings, PermissionSystemName.System },
+                    ControllerName = "Setting",
+                    ActionName = "FrontendAsset",
+                    DisplayOrder = 10,
+                    IconClass = "fa fa-dot-circle-o"
+                },
+                new() {
                     SystemName = "System settings",
                     ResourceName = "Admin.Settings.System",
                     PermissionNames = new List<string> { PermissionSystemName.System },

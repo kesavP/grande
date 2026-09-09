@@ -45,4 +45,52 @@
 	<Resource Name="validation.invalid" Area="Front">
 		<Value>Invalid value.</Value>
 	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset" Area="Admin">
+		<Value>Frontend assets</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Description" Area="Admin">
+		<Value>Serve the storefront bundles from a CDN instead of from inside the application image, so a frontend release does not need a rebuild. Leave the base URL empty to keep serving them locally. Integrity hashes are stored here, separately from the files, so a compromised CDN cannot make a browser execute an altered bundle. These settings apply to every store - they are read once at startup, before any store is known.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.BaseUrl" Area="Admin">
+		<Value>Base URL</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.BaseUrl.Hint" Area="Admin">
+		<Value>Absolute URL ending in a slash, including a version segment, for example https://example.blob.core.windows.net/bundles/v1/. Empty serves the bundles shipped inside the image.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.BaseUrl.Invalid" Area="Admin">
+		<Value>Enter an absolute http or https URL ending in a slash.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Manifest" Area="Admin">
+		<Value>Asset manifest</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Manifest.Hint" Area="Admin">
+		<Value>Contents of wwwroot/bundles/asset-manifest.json from the frontend build. It maps each bundle to its file name and integrity hash.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Manifest.Invalid" Area="Admin">
+		<Value>The manifest must be JSON containing an "assets" object. Paste the contents of asset-manifest.json.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.UseSubresourceIntegrity" Area="Admin">
+		<Value>Use Subresource Integrity</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.UseSubresourceIntegrity.Hint" Area="Admin">
+		<Value>Emit integrity and crossorigin attributes so the browser verifies each bundle before running it. Turn off only to diagnose a mismatch - a blocked script is silent in the page and visible only in the browser console.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.RestartRequired" Area="Admin">
+		<Value>Saved. The manifest is parsed once at startup, so restart the application for this to take effect.</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Resolved" Area="Admin">
+		<Value>Resolved assets</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Resolved.Asset" Area="Admin">
+		<Value>Asset</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Resolved.Url" Area="Admin">
+		<Value>URL</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Resolved.Integrity" Area="Admin">
+		<Value>Integrity</Value>
+	</Resource>
+	<Resource Name="Admin.Settings.FrontendAsset.Resolved.NoIntegrity" Area="Admin">
+		<Value>no hash - the browser will not verify this file</Value>
+	</Resource>
 </Language>

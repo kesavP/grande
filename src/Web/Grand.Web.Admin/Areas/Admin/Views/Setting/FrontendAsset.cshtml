@@ -1,0 +1,103 @@
+﻿@using Grand.Web.AdminShared.Models.Settings
+@model FrontendAssetSettingsModel
+@{
+    ViewBag.Title = Loc["Admin.Settings.FrontendAsset"];
+}
+<form asp-controller="Setting" asp-action="FrontendAsset" method="post">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="x_panel light form-fit">
+                <div class="x_title">
+                    <div class="caption level-caption">
+                        <i class="fa fa-cogs"></i>
+                        @Loc["Admin.Settings.FrontendAsset"]
+                    </div>
+                    <div class="actions btn-set">
+                        <button type="submit" name="save" class="btn btn-success">
+                            <i class="fa fa-check"></i> @Loc["Admin.Common.Save"]
+                        </button>
+                    </div>
+                </div>
+                @* No StoreScope component here, unlike the other settings screens. These values
+                   are read by a singleton whose store scope depends on which request built it,
+                   so they are stored globally and apply to every store. See the remarks on
+                   SettingController.FrontendAsset. *@
+                <div class="x_content form">
+                    <div class="form-horizontal">
+                        <div class="form-body">
+                            <div class="alert alert-info">
+                                @Loc["Admin.Settings.FrontendAsset.Description"]
+                            </div>
+                            <div class="form-group">
+                                <admin-label asp-for="BaseUrl" class="col-md-3 col-sm-3 control-label"/>
+                                <div class="col-md-9 col-sm-9">
+                                    <admin-input asp-for="BaseUrl"/>
+                                    <span asp-validation-for="BaseUrl"></span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <admin-label asp-for="Manifest" class="col-md-3 col-sm-3 control-label"/>
+                                <div class="col-md-9 col-sm-9">
+                                    <admin-textarea asp-for="Manifest" rows="12"></admin-textarea>
+                                    <span asp-validation-for="Manifest"></span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <admin-label asp-for="UseSubresourceIntegrity" class="col-md-3 col-sm-3 control-label"/>
+                                <div class="col-md-9 col-sm-9">
+                                    <admin-input asp-for="UseSubresourceIntegrity"/>
+                                    <span asp-validation-for="UseSubresourceIntegrity"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @if (Model.ResolvedAssets.Any())
+    {
+        <div class="row">
+            <div class="col-md-12">
+                <div class="x_panel light form-fit">
+                    <div class="x_title">
+                        <div class="caption level-caption">
+                            <i class="fa fa-list"></i>
+                            @Loc["Admin.Settings.FrontendAsset.Resolved"]
+                        </div>
+                    </div>
+                    <div class="x_content">
+                        <table class="table table-striped table-bordered">
+                            <thead>
+                            <tr>
+                                <th>@Loc["Admin.Settings.FrontendAsset.Resolved.Asset"]</th>
+                                <th>@Loc["Admin.Settings.FrontendAsset.Resolved.Url"]</th>
+                                <th>@Loc["Admin.Settings.FrontendAsset.Resolved.Integrity"]</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var asset in Model.ResolvedAssets)
+                            {
+                                <tr>
+                                    <td>@asset.Name</td>
+                                    <td style="word-break: break-all;">@asset.Url</td>
+                                    <td style="word-break: break-all;">
+                                        @if (string.IsNullOrEmpty(asset.Integrity))
+                                        {
+                                            <span class="text-warning">@Loc["Admin.Settings.FrontendAsset.Resolved.NoIntegrity"]</span>
+                                        }
+                                        else
+                                        {
+                                            @asset.Integrity
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</form>

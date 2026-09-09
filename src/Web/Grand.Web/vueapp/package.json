@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/build-theme-css.mjs",
+    "build": "vite build && node scripts/build-theme-css.mjs && node build-asset-manifest.mjs",
     "lint": "eslint src",
     "audit:prod": "npm audit --omit=dev --audit-level=moderate"
   },

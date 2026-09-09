@@ -60,6 +60,25 @@ public class SecurityConfig
     public bool UseDefaultSecurityHeaders { get; set; }
 
     /// <summary>
+    ///     Extra origins allowed to serve JavaScript, on top of "self". Only consulted when
+    ///     UseDefaultSecurityHeaders is true.
+    ///
+    ///     Without this the Content-Security-Policy script-src is "*", which permits a script
+    ///     from anywhere and so blocks nothing. List every origin the storefront legitimately
+    ///     loads script from - the bundle storage account or CDN
+    ///     (https://&lt;account&gt;.blob.core.windows.net), analytics, payment provider SDKs.
+    ///
+    ///     An origin, not a URL: scheme and host only, no path and no trailing slash.
+    ///
+    ///     Note what this cannot tighten. 'unsafe-inline' stays because 64 storefront views
+    ///     carry inline &lt;script&gt; blocks, and 'unsafe-eval' stays because Vue is built with
+    ///     the runtime template compiler, which compiles the Razor-rendered templates with
+    ///     new Function(). Removing either blanks the storefront. This narrows *where a file
+    ///     may come from*, which is the part that is enforceable today.
+    /// </summary>
+    public string[] ScriptSrcAllowedHosts { get; set; } = [];
+
+    /// <summary>
     ///     HTTP Strict Transport Security Protocol
     ///     isn't recommended in development because the HSTS header is highly cacheable by browsers
     /// </summary>

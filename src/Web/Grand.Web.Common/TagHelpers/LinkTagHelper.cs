@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Grand.Business.Core.Interfaces.Storage;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 
@@ -17,12 +18,15 @@ public class LinkTagHelper : TagHelper
 
     private readonly IResourceManager _resourceManager;
 
+    private readonly IFrontendAssetResolver _assetResolver;
+
     public LinkTagHelper(IResourceManager resourceManager, IHttpContextAccessor httpContextAccessor,
-        IFileVersionProvider fileVersionProvider)
+        IFileVersionProvider fileVersionProvider, IFrontendAssetResolver assetResolver)
     {
         _resourceManager = resourceManager;
         _httpContextAccessor = httpContextAccessor;
         _fileVersionProvider = fileVersionProvider;
+        _assetResolver = assetResolver;
     }
 
     [HtmlAttributeName(SrcPriority)] public int Priority { get; set; }
@@ -62,9 +66,26 @@ public class LinkTagHelper : TagHelper
         if (!string.IsNullOrEmpty(Src))
         {
             var href = Src;
-            if (AppendVersion == true && _httpContextAccessor.HttpContext != null)
+
+            //a stylesheet published to a CDN comes from the manifest, with its integrity hash
+            var asset = ResolveAsset(Src);
+            if (asset != null)
+            {
+                href = asset.Url;
+                if (!string.IsNullOrEmpty(asset.Integrity))
+                {
+                    linkEntry.SetAttribute("integrity", asset.Integrity);
+                    //required for SRI on a cross-origin stylesheet; harmless same-origin
+                    linkEntry.SetAttribute("crossorigin", "anonymous");
+                }
+            }
+            //redundant once a manifest is in play, and it would hash a file no longer local
+            else if (AppendVersion == true && _httpContextAccessor.HttpContext != null)
+            {
                 href = _fileVersionProvider.AddFileVersionToPath(
                     _httpContextAccessor.HttpContext.Request.PathBase, href);
+            }
+
             linkEntry.Href = href;
         }
 
@@ -86,5 +107,17 @@ public class LinkTagHelper : TagHelper
         _resourceManager.RegisterLink(linkEntry);
 
         output.TagName = null;
+    }
+
+    /// <summary>
+    ///     Looks up "/bundles/x.css" by file name; null when it is not a managed bundle.
+    /// </summary>
+    private FrontendAsset ResolveAsset(string src)
+    {
+        const string prefix = "/bundles/";
+        if (string.IsNullOrEmpty(src) || !src.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return _assetResolver.Resolve(src[prefix.Length..]);
     }
 }

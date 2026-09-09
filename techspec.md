@@ -1,7 +1,8 @@
 # GrandNode2 — Docker & Azure Deployment Technical Specification
 
 This document covers building the Docker images, generating the API secret keys, running
-the application in Docker, and deploying it to Azure.
+the application in Docker, deploying it to Azure, and publishing the storefront's frontend
+assets independently of the application.
 
 - [1. What is being deployed](#1-what-is-being-deployed)
 - [2. Prerequisites](#2-prerequisites)
@@ -43,8 +44,20 @@ the application in Docker, and deploying it to Azure.
   - [8.12 Applying from a pipeline, and keeping the evidence](#812-applying-from-a-pipeline-and-keeping-the-evidence)
   - [8.13 Validating a deployment against the rules](#813-validating-a-deployment-against-the-rules)
   - [8.14 What the Terraform module enforces](#814-what-the-terraform-module-enforces)
-- [9. Verification](#9-verification)
-- [10. Known constraints](#10-known-constraints)
+- [9. Frontend assets — build, publish, and Subresource Integrity](#9-frontend-assets--build-publish-and-subresource-integrity)
+  - [9.1 Building the bundles and the manifest](#91-building-the-bundles-and-the-manifest)
+  - [9.2 Provisioning the storage container](#92-provisioning-the-storage-container)
+  - [9.3 Publishing a release](#93-publishing-a-release)
+  - [9.4 The base URL](#94-the-base-url)
+  - [9.5 Wiring it up in the admin panel](#95-wiring-it-up-in-the-admin-panel)
+  - [9.6 How a page picks the bundle up](#96-how-a-page-picks-the-bundle-up)
+  - [9.7 What SRI actually protects](#97-what-sri-actually-protects)
+  - [9.8 Rolling back](#98-rolling-back)
+  - [9.9 When it goes wrong](#99-when-it-goes-wrong)
+  - [9.10 Restricting where scripts may come from](#910-restricting-where-scripts-may-come-from)
+  - [9.11 Limitations](#911-limitations)
+- [10. Verification](#10-verification)
+- [11. Known constraints](#11-known-constraints)
 ---
 
 ## 1. What is being deployed
@@ -67,7 +80,7 @@ All three listen on **port 8080** and run as the non-root `app` user.
 Splitting the admin into its own container is optional. Its main benefit on Azure is that
 Container Apps ingress restrictions apply per-app, so a separate admin app can be given internal
 ingress or an IP allowlist without a WAF in front. See [section 7](#7-running-in-docker--split-storefront--admin)
-and [section 10](#10-known-constraints) for the trade-offs.
+and [section 11](#11-known-constraints) for the trade-offs.
 
 ---
 
@@ -821,7 +834,7 @@ az containerapp env storage set -n $ENVNAME -g $RG \
 
 Then reference that storage as a volume mounted at `/app/wwwroot/assets/images` in each app's
 YAML (`az containerapp update --yaml`). Review the constraints in
-[section 10](#10-known-constraints) first — in particular, the theme picker is empty in a
+[section 11](#11-known-constraints) first — in particular, the theme picker is empty in a
 standalone admin container.
 
 ---
@@ -892,7 +905,7 @@ exactly one app, and prefer single-revision mode for upgrades that carry migrati
 | Queued email never sends, unpaid orders never expire, outbox never drains | `min_replicas = 0` with no `scheduled_task_jobs` — background work is hosted in the web process. See [section 8.5](#85-scheduled-tasks-with-scale-to-zero). |
 | A scheduled-task job runs and does nothing | Its key does not match `ScheduleTaskName` in the database, or the task row is disabled in the admin panel. |
 | App will not start after enabling volumes | The Azure Files share was mounted before being seeded, hiding `App_Data/appsettings.json`. |
-| Admin theme picker is empty | Expected in a split admin container — see [section 10](#10-known-constraints). |
+| Admin theme picker is empty | Expected in a split admin container — see [section 11](#11-known-constraints). |
 
 Useful commands:
 
@@ -1020,7 +1033,7 @@ Requires `az` (signed in) and `jq`.
 
 ### 8.14 What the Terraform module enforces
 
-Four `check` blocks encode the failures this deployment actually hit, so they surface at plan time
+Five `check` blocks encode the failures this deployment actually hit, so they surface at plan time
 instead of in production:
 
 | Check | Fails when | Why it exists |
@@ -1028,6 +1041,7 @@ instead of in production:
 | `installer_needs_a_warm_replica` | `enable_installer = true` with `min_replicas = 0` | The `/install` POST seeds the database inside a single HTTP request; at scale-to-zero it cold-starts first and the browser times out before the app sees it. |
 | `background_work_has_a_home` | `min_replicas = 0` and no `scheduled_task_jobs` | Scheduled tasks live in the web process — see [section 8.5](#85-scheduled-tasks-with-scale-to-zero). |
 | `redis_required_for_scale_out` | `max_replicas > 1` with `enable_redis = false` | The cache is per-instance; replicas would serve stale prices and stock. Correctness, not performance. |
+| `bundle_storage_needs_cors` | `enable_bundle_storage = true` with an empty `bundle_cors_origins` | Subresource Integrity forces a cross-origin fetch. Without an allowed origin the browser discards every bundle and the page renders with no JavaScript — silently. See [section 9.2](#92-provisioning-the-storage-container). |
 | `volumes_must_be_seeded_first` | `enable_persistent_volumes = true` with `volumes_seeded = false` | An Azure Files mount replaces the directory the image ships. `/app/App_Data` carries `appsettings.json`, without which the host will not start. |
 
 Two further settings the module applies that are easy to get wrong by hand:
@@ -1043,7 +1057,380 @@ Two further settings the module applies that are easy to get wrong by hand:
 
 ---
 
-## 9. Verification
+## 9. Frontend assets — build, publish, and Subresource Integrity
+
+The storefront's JavaScript and CSS live in `src/Web/Grand.Web/wwwroot/bundles/` and are baked
+into the image. That means a one-line CSS change costs a full .NET image build, a registry push
+and a new container revision, to move 830 kB of static files that the application never reads.
+
+This section covers serving those files from Azure Storage instead, so a frontend release is an
+upload plus a settings change. Subresource Integrity is what makes that safe: it is the reason the
+storage account can be a dumb public bucket without becoming a way to inject script into the
+storefront.
+
+**All of it is opt-in.** With nothing configured the application serves `/bundles/*` from inside
+the image exactly as before, and every page renders identically. Configuration lives in
+`FrontendAssetSettings` — see [section 9.5](#95-wiring-it-up-in-the-admin-panel).
+
+### 9.1 Building the bundles and the manifest
+
+```bash
+cd src/Web/Grand.Web/vueapp
+npm ci
+npm run build
+```
+
+`npm run build` is three steps: `vite build`, then `scripts/build-theme-css.mjs`, then
+`build-asset-manifest.mjs`. Running `vite build` alone leaves the theme CSS and the manifest
+stale.
+
+Output, all in `src/Web/Grand.Web/wwwroot/bundles/`:
+
+| File | Size | Referenced from |
+|---|---|---|
+| `app.runtime.bundle.js` | ~400 kB | `Views/Shared/Partials/Head.cshtml`, `Theme.Modern/.../Head.cshtml` |
+| `libs.css` | ~319 kB | both `Head.cshtml` files |
+| `style.min.css` | ~53 kB | `Head.cshtml` (LTR languages) |
+| `style.rtl.min.css` | ~56 kB | `Head.cshtml` (RTL languages) |
+| `asset-manifest.json` | ~700 B | **not** referenced by any view — see below |
+
+These files are committed to the repository. That is deliberate and predates this feature: the
+image build does not run npm, so an uncommitted bundle is simply not on the page. The
+`Frontend CI` workflow rebuilds them on every PR touching `vueapp/`, `wwwroot/theme/css/` or
+`wwwroot/bundles/` and fails if the committed output differs from the source — including the
+manifest.
+
+`asset-manifest.json` maps a logical asset name to a file and a `sha384` hash:
+
+```json
+{
+  "version": 1,
+  "assets": {
+    "app.runtime.bundle.js": {
+      "file": "app.runtime.bundle.js",
+      "integrity": "sha384-zxiqcuS4jHHPcwvSprFpxb/BWJw0+CryiDS7TtFU5ao5F1YQMUqE7+pA7jxEOxZ0"
+    }
+  }
+}
+```
+
+It deliberately carries no build timestamp. The file is committed and CI rebuilds it to check
+the bundles still match their source, so a generation time would differ on every run and fail
+that check permanently. A release is identified by the version prefix its files are uploaded
+under.
+
+The logical name is what a Razor view asks for, so the file on disk can be renamed or fingerprinted
+later without touching a view.
+
+### 9.2 Provisioning the storage container
+
+Three variables on the Terraform module:
+
+```hcl
+module "grandnode" {
+  # ...
+  enable_bundle_storage = true
+  bundle_cors_origins   = ["https://ca-grandnode-prod.<suffix>.azurecontainerapps.io"]
+
+  # object IDs, not sign-in names
+  bundle_publisher_object_ids = ["b8ec1442-7892-4e52-a29e-1b3c384d6d4c"]
+}
+```
+
+`enable_bundle_storage` creates a `bundles` container on the existing storage account with
+`container_access_type = "blob"` — anonymous read of blobs, no container listing. No new account,
+no new cost line beyond the bytes stored.
+
+`bundle_cors_origins` adds a CORS rule to the account's blob service allowing `GET` and `HEAD`
+from the storefront's origin.
+
+`bundle_publisher_object_ids` grants *Storage Blob Data Contributor* to each listed principal, so
+releases can be published with `--auth-mode login` rather than the account key. Leave it empty and
+[section 9.3](#93-publishing-a-release) fails with `You do not have the required permissions
+needed to perform this operation` — an Owner or Contributor role on the subscription does **not**
+convey data-plane access to blobs.
+
+Look up an object ID rather than guessing it; the resource takes a GUID, not an email address:
+
+```bash
+az ad signed-in-user show --query id -o tsv     # yourself
+az ad sp show --id <app-id> --query id -o tsv   # a CI service principal
+```
+
+Two things about this grant that are easy to trip over:
+
+- **Applying it needs Owner or User Access Administrator.** Contributor cannot create role
+  assignments, and the apply fails on `Microsoft.Authorization/roleAssignments/write`.
+- **It is scoped to the storage account, not to the `bundles` container.** `upload-batch`
+  enumerates the container before writing, which a container-scoped grant does not cover on a
+  hierarchical-namespace account. That makes it a wider grant than bundles alone strictly needs —
+  `media` is included — but still narrower and more auditable than the account key, which is a
+  single shared secret covering every container with no attribution.
+
+**CORS is not optional here, and getting it wrong fails silently.** A `<script>` carrying an
+`integrity` attribute is fetched with `crossorigin="anonymous"`, which makes it a CORS request. A
+response without a matching `Access-Control-Allow-Origin` is discarded by the browser: the page
+renders with no JavaScript, nothing appears in the application logs, and the storage access log
+records a successful `200`. A `check` block refuses the plan rather than letting that reach
+production:
+
+```
+enable_bundle_storage = true requires bundle_cors_origins. Subresource Integrity forces
+a CORS fetch; without an allowed origin the browser silently discards the bundles.
+```
+
+Take the origin from the `application_url` output, with no trailing slash and no path. If a custom
+domain is bound ([section 8.9](#89-custom-domain-and-tls)), list both — the browser sends whichever
+origin the page was served from.
+
+### 9.3 Publishing a release
+
+Upload into a **version prefix**. The prefix is what makes a release atomic: new files land beside
+the old ones and nothing switches until the setting is updated, so a rollback is a settings change
+rather than a re-upload.
+
+```bash
+ACCOUNT=$(terraform -chdir=infra/environments/prod output -raw storage_account_name)
+VERSION=v1
+
+# Stage everything except the manifest. The exclusion is the point, not a tidiness
+# measure - see section 9.7.
+STAGE=$(mktemp -d)
+cp -r src/Web/Grand.Web/wwwroot/bundles/. "$STAGE/"
+rm -f "$STAGE/asset-manifest.json"
+
+az storage blob upload-batch \
+  --account-name "$ACCOUNT" \
+  --destination bundles \
+  --destination-path "$VERSION" \
+  --source "$STAGE" \
+  --content-cache 'public, max-age=31536000, immutable' \
+  --auth-mode login \
+  --overwrite false
+
+rm -rf "$STAGE"
+```
+
+Notes on each part that matters:
+
+- **`asset-manifest.json` is removed from the staging copy before the upload.** The hashes must not
+  travel with the files they describe. See [section 9.7](#97-what-sri-actually-protects). Do not
+  reach for `--pattern` to do this: `--pattern` is Python `fnmatch`, which supports only `*`, `?`,
+  `[seq]` and `[!seq]` — no brace expansion — so `'*.{js,css}'` matches nothing and uploads an
+  empty release without failing.
+- **Staging a copy also carries `fonts/` along**, which `libs.css` references by relative path and
+  which an extension filter would drop.
+- **`--content-cache ... immutable`** is safe only because of the version prefix. A given URL under
+  `v1/` never changes content; the next release is `v2/`. Without the prefix this caches a stale
+  bundle in every visitor's browser for a year.
+- **`--overwrite false`** turns an accidental re-upload into a `ResourceExistsError` instead of
+  silently changing a file that browsers have been told is immutable — and that the stored hashes
+  still describe.
+- **`--auth-mode login`** uses your Entra identity, and needs the *Storage Blob Data Contributor*
+  role granted by `bundle_publisher_object_ids` in [section 9.2](#92-provisioning-the-storage-container).
+  *Owner* alone does not convey data-plane access. As a fallback, `--auth-mode key` works whenever
+  the account still allows shared-key access, but it uses one secret that covers every container on
+  the account and leaves no record of who published.
+
+Confirm the content types survived the upload — a `.js` blob served as
+`application/octet-stream` is refused by some browsers:
+
+```bash
+az storage blob show --account-name "$ACCOUNT" -c bundles \
+  -n "$VERSION/app.runtime.bundle.js" --auth-mode login \
+  --query "properties.contentSettings.contentType" -o tsv     # expect application/javascript
+```
+
+### 9.4 The base URL
+
+```
+https://<storage-account>.blob.core.windows.net/bundles/<version>/
+```
+
+The trailing slash is required and is enforced by the validator. Behind a CDN or Front Door,
+use that hostname instead; nothing else changes.
+
+### 9.5 Wiring it up in the admin panel
+
+**Settings → Frontend asset settings** (`/admin/Setting/FrontendAsset`).
+
+| Field | Value |
+|---|---|
+| Base URL | the URL from 9.4, absolute, with trailing slash. Empty = serve from the image. |
+| Manifest | the entire contents of `asset-manifest.json`, pasted |
+| Use Subresource Integrity | on |
+
+This screen has no store scope selector, and that is deliberate — see
+[section 9.11](#911-limitations). The values apply to every store.
+
+Both fields are validated on save: the base URL must be absolute `http`/`https` with a trailing
+slash, and the manifest must be JSON containing an `assets` object. Both failures are otherwise
+invisible — a bad base URL 404s every bundle, and a manifest without `assets` parses cleanly and
+resolves nothing, which looks exactly like not having configured the feature at all.
+
+Below the form, a **Resolved assets** table shows the URL and hash the application will actually
+emit for each of the four bundles. It reflects the *running* configuration, not what is in the
+form, which makes it the check that the restart below has taken effect.
+
+**Restart the application after saving.** `IFrontendAssetResolver` is a singleton that parses the
+manifest once, so a running process keeps serving the previous release until it is recycled. The
+screen says so on save. On Container Apps:
+
+```bash
+az containerapp revision restart -g <rg> -n <app> \
+  --revision "$(az containerapp revision list -g <rg> -n <app> \
+    --query "[?properties.active].name | [0]" -o tsv)"
+```
+
+Then reload the settings page and confirm the Resolved assets table shows the new URLs.
+
+### 9.6 How a page picks the bundle up
+
+```
+Head.cshtml                 <script asp-location="Head" asp-src="/bundles/app.runtime.bundle.js">
+  ↓
+ScriptTagHelper             strips "/bundles/", asks the resolver for "app.runtime.bundle.js"
+LinkTagHelper               (same, for stylesheets)
+  ↓
+IFrontendAssetResolver      manifest lookup → { Url, Integrity }, or null
+  ↓
+rendered markup             <script src="https://…/v1/app.runtime.bundle.js"
+                                    integrity="sha384-…" crossorigin="anonymous" defer>
+```
+
+Three behaviours worth knowing:
+
+- **A `null` from the resolver is the normal case, not an error.** Anything not in the manifest —
+  every plugin script, every theme asset, all of `/assets/*` — keeps the path written in the view.
+  That is what keeps the default deployment working with no configuration at all.
+- **`asp-append-version` is suppressed for a manifest-resolved asset.** The version prefix already
+  changes per release, and hashing a file that is no longer served locally would produce a wrong
+  answer. It still applies to everything else.
+- **`src=` and `asp-src=` are not interchangeable.** Only `asp-src` binds the tag helper; a plain
+  `src` renders untouched and never reaches the resolver. Both `Head.cshtml` files used plain `src`
+  on the script tag and were changed as part of this work. Any new view that wants a managed bundle
+  must use `asp-src`.
+
+### 9.7 What SRI actually protects
+
+The browser is told the hash a file must have. A file that does not match is not executed —
+regardless of who served it.
+
+That only means something because **the hash and the file reach the browser by different paths**:
+
+| Travels via | Carries |
+|---|---|
+| Azure Storage → browser | the bundle |
+| MongoDB → application → HTML | the hash |
+
+Whoever holds the storage key can replace `app.runtime.bundle.js`. They cannot make a browser run
+it, because the hash in the page still describes the old file and the script is blocked. To
+actually inject script, an attacker needs the storage account *and* database write access — which
+is a materially higher bar than a leaked SAS token or a misconfigured container.
+
+Publish both from the same place and this collapses to nothing: change the file, change the hash
+alongside it, and the browser is satisfied. **That is why `asset-manifest.json` is excluded from
+the upload in 9.3 and pasted into settings instead.** Uploading it next to the bundles would leave
+the mechanism in place and the protection gone, and nothing would look wrong.
+
+What it does not do: SRI is integrity, not confidentiality or availability. It does not stop a
+deleted bundle, a hostile CDN serving nothing, or anything at all once an attacker has database
+write access.
+
+### 9.8 Rolling back
+
+Point the base URL at the previous prefix, restore that release's manifest, restart. The old files
+were never deleted.
+
+To abandon external serving entirely, clear **Base URL** and restart: the application falls back to
+the bundles inside the image, which have been there the whole time.
+
+Both are settings changes. Neither needs a rebuild, a redeploy, or a Terraform apply.
+
+### 9.9 When it goes wrong
+
+Every failure here is silent in the application logs, because none of it involves the application
+at request time. Read the browser console first.
+
+| Symptom | Cause |
+|---|---|
+| Page renders unstyled with no interactivity; console shows a CORS error | Origin missing from `bundle_cors_origins`, or the app is reached on a hostname that is not in the list |
+| Console: "Failed to find a valid digest ... integrity attribute" | The uploaded file does not match the pasted manifest — usually a manifest from a different build |
+| 404 on every bundle | Base URL missing its trailing slash, or the version prefix does not exist |
+| Settings saved, page unchanged | The process was not restarted; the singleton still holds the previous manifest |
+| Resolved assets table is empty | The manifest has no `assets` object, or it failed to parse — the resolver logs a parse failure once and falls back to local bundles |
+| Some bundles switch, others do not | Those views use plain `src=` rather than `asp-src=` |
+
+### 9.10 Restricting where scripts may come from
+
+Subresource Integrity stops a *modified* bundle from executing. It says nothing about a script
+tag that was never yours — one injected through a stored-XSS hole, pointing at an attacker's
+host. That is what `script-src` is for, and the two are complementary.
+
+```hcl
+module "grandnode" {
+  # ...
+  enable_default_security_headers = true
+  script_src_allowed_hosts        = ["https://www.googletagmanager.com"]
+}
+```
+
+The bundle origin is added automatically when `enable_bundle_storage = true`, because forgetting
+it is the obvious way to take the storefront down with this setting. List everything else the
+storefront legitimately loads script from: analytics, payment provider SDKs, chat widgets, and
+anything a plugin injects a `<script src>` for.
+
+**Be honest about what this achieves.** The policy still carries `unsafe-inline` and
+`unsafe-eval`, and neither can be removed here:
+
+- 64 storefront views render inline `<script>` blocks.
+- Vue ships the **runtime template compiler** — `vite.config.js` aliases `vue` to
+  `vue.esm-bundler.js` — because the templates *are* the Razor markup, parsed out of the DOM and
+  compiled with `new Function()` on every page. `unsafe-eval` is load-bearing; removing it
+  renders a blank storefront.
+
+So this narrows *where a file may come from*, not *what may run*. Against an attacker who can
+inject `<script src="https://evil.example/x.js">` it is effective; against one who can inject an
+inline `<script>` it is not. That is still a material improvement over the shipped default of
+`script-src *`, which permits both.
+
+Turning it on also enables the other default headers — HSTS, `X-Frame-Options: Deny`,
+`X-Content-Type-Options: nosniff`, a referrer policy, and a Permissions-Policy that already grants
+`camera`, `microphone`, `geolocation` and `payment` to `self`.
+
+**Verify in the browser, not the logs.** A CSP violation is reported to the console and nowhere
+else — the server never learns of it:
+
+```bash
+curl -sI https://<storefront>/ | grep -i content-security-policy
+```
+
+Then load the storefront with the console open and click through a product page, the cart and
+checkout. A blocked resource names the directive that refused it, which tells you exactly what to
+add to `script_src_allowed_hosts`.
+
+### 9.11 Limitations
+
+**The configuration is global, not per-store.** `IFrontendAssetResolver` is a singleton built on
+first use, taking `FrontendAssetSettings` through its constructor. The settings registration reads
+the store id from `IContextAccessor`, which is an `AsyncLocal` — so the scope the resolver captures
+is whichever store served the first request after a restart, and no store at all if anything
+resolves it outside a request. That is not a scope an administrator can aim at, so the screen has
+no store selector and writes to the global scope, which `SettingService.LoadSetting` falls back to
+for any store without an override of its own. A multi-store installation serves the same bundles
+to every store.
+
+**The manifest is duplicated by hand.** It is generated by the frontend build and pasted into
+settings; nothing verifies the two agree. A stale paste is caught by the browser (blocked scripts)
+rather than at save time.
+
+**No CDN in front by default.** The blob endpoint serves the bundles directly. That is adequate for
+a single-region deployment; a global storefront should put Front Door or a CDN profile in front of
+the container and set the base URL to that hostname.
+
+---
+
+## 10. Verification
 
 Two health endpoints are exposed by every image:
 
@@ -1080,7 +1467,7 @@ enabled, and an unreachable MongoDB.
 
 ---
 
-## 10. Known constraints
+## 11. Known constraints
 
 > Sections 1-7 and 9 were exercised against local Docker containers and a seeded MongoDB.
 > Section 8 was executed end to end against a live Azure subscription in South India on
